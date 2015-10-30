@@ -1,0 +1,144 @@
+\documentclass{article}
+
+\usepackage{nips15submit_e,times}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{url}
+\usepackage{natbib}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage{microtype}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\I}{\mathcal{I}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\tr}{\text{tr}}
+\newcommand{\cov}{\text{cov}}
+\newcommand{\eps}{\varepsilon}
+\renewcommand{\v}[1]{\mathbf{#1}}
+
+\nipsfinalcopy
+
+\begin{document}
+
+\title{Gaussian Process Random Fields: Supplementary Material}
+
+\author{
+David A. Moore and Stuart J. Russell\\
+}
+
+\maketitle
+
+
+
+\section{Block tree structure}
+
+It is easy to see that the GPRF approximation is exact when the MRF on $\v{y}$ induced by the true precision matrix $J$ is a tree. For any choice of root node $\v{y}_\text{root}$, the tree structure implies we write the true GP distribution as a product of parent-conditional distributions,
+\[p(\v{y}) = p(\v{y}_\text{root}) \prod_{i \ne \text{root}} p(\v{y}_i | \v{y}_{\pi(i)})\]
+where $\pi(i)$ is the (unique) parent of node $i$ with respect to our chosen root. Then expanding the conditional distribution
+\begin{align*}
+p(\v{y}) &= p(\v{y}_\text{root}) \prod_{i \ne \text{root}} \frac{p(\v{y}_i , \v{y}_{\pi(i)})}{p(\v{y}_{\pi(i)})}\\
+ &= p(\v{y}_\text{root}) \prod_{i \ne \text{root}} p(\v{y}_i) \frac{p(\v{y}_i , \v{y}_{\pi(i)})}{p(\v{y}_i) p(\v{y}_{\pi(i)}) }\\
+ &= \left(\prod_{i} p(\v{y}_i) \right) \left(\prod_{i \ne \text{root}} p(\v{y}_i) \frac{p(\v{y}_i , \v{y}_{\pi(i)})}{p(\v{y}_i) p(\v{y}_{\pi(i)}) }\right)
+\end{align*}
+yields exactly the GPRF objective for the edge set $E={(i, \pi(i)}$, i.e., the edges that define the tree. 
+
+Note that the presence or absence of a tree structure is a function both of the true precision matrix and of the partition we choose: a matrix may induce a tree structure for some choices of partition but not for others. In many cases it is easier to reason about the structure of the covariance matrix: assuming a stationary kernel, nonzero (or non-negligible) entries of the covariance matrix correspond to data points that are nearby each other, so the covariance matrix reflects the geometry of the data itself. If the data can be viewed as lying on a treelike manifold (including special cases such as chains, e.g., for time series data), then for reasonable choices of partition, the graph that connects nearby blocks of data points will have a tree structure. Of course, there is no formal guarantee that this structure will carry over to the precision matrix.
+
+\section{Approximation to the true Gaussian}
+\label{sec:approx-gaussian}
+
+In this section we prove Theorem 1 from the main text, showing that $q_{GPRF}$ is an unnormalized Gaussian density with a particular precision matrix. 
+
+For any pair of blocks $(i,j)$, define the {\em local precision  matrix} $Q^{(ij)}$ to be the inverse of the marginal covariance,
+\[Q^{(ij)} = \left(\begin{array}{cc} Q^{(ij)}_{11} &  Q^{(ij)}_{12}\\
+  Q^{(ij)}_{21}  & Q^{(ij)}_{22}\end{array}\right) = \left(\begin{array}{cc} K_{ii} &  K_{ij}\\
+  K_{ji}  & K_{jj}\end{array}\right)^{-1},\]
+The notation $Q^{(ij)}$ is used to distinguish these local precision
+matrices from the blocks $J_{ij}$ of the global precision matrix. Writing (\ref{eqn:gprf-log}) in terms of unnormalized Gaussian densities,
+\begin{align*}
+\log q_{GPRF}(\v{y}) &= -\frac{1}{2} \sum_{i=1}^M (1-|E_i|) \v{y}_i^T
+K_{ii}^{-1} \v{y}_i -\frac{1}{2}  \sum_{(i,j)\in E} \left(\begin{array}{c}
+      \v{y}_i \\ \v{y}_j\end{array}\right)^T Q^{(ij)}\left(\begin{array}{c}
+      \v{y}_i \\
+      \v{y}_j\end{array}\right) + C\\
+&= -\frac{1}{2}\sum_{i=1}^M  \v{y}_i^T \left(K_{ii}^{-1} - |E_i|
+  K_{ii}^{-1}\right)\v{y}_i -\frac{1}{2}  \left(\sum_{(i,j)\in E} \v{y}_i^T
+Q^{(ij)}_{11} \v{y}_i + 2\v{y}_i^T Q^{(ij)}_{12}\v{y}_j + \v{y}_j^T Q^{(ij)}_{22}\v{y}_j\right) + C\\
+&= -\frac{1}{2}\sum_{i=1}^M  \v{y}_i^T \left(K_{ii}^{-1} + \sum_{j\in E_i}
+\left(Q^{(ij)}_{11} - K_{ii}^{-1}\right) \right)\v{y}_i - \sum_{(i,j)\in E}
+\v{y}_i^T Q^{(ij)}_{12} \v{y}_j + C
+\end{align*}
+we obtain the standard form (\ref{eqn:gaussian-mrf}) of a Gaussian
+MRF, showing that $q_{GPRF}$ does in fact induce a Gaussian density on
+$\v{y}$. This
+representation allows us to read off the implicit precision matrix $\tilde{J}$ in block wise form
+\begin{equation}
+\tilde{J}_{ii} = K_{ii}^{-1} + \sum_{j\in E_i} \left(Q^{(ij)}_{11}
+    - K_{ii}^{-1}\right), \qquad \tilde{J}_{ij} =
+  \left\{\begin{array}{ll}Q^{(ij)}_{12} & \text{ if } (i,j) \in E\\0
+    & \text{ otherwise.}\end{array}\right.\label{eqn:approx-precision}
+\end{equation}
+We see that the off-diagonal blocks of the precision matrix are simply
+the corresponding blocks of the pairwise local precisions. Each
+diagonal block, by contrast, combines the inverse of the local
+covariance matrix with corrections from the pairwise
+precisions. Note the approximate precision $\tilde{J}$ may not be positive
+definite, in which case $q_{GPRF}$ is not a normalizable density,
+although it is still ``approximately normalized'' in the sense of the next section. 
+
+\section{Approximate normalization}
+\label{sec:approx-norm}
+
+In this section we prove Theorem 2 from the main text:
+
+\begin{theorem}
+The objective $q_{GPRF}$ is approximately normalized in the sense that
+the optimal value of the {\em Bethe free energy} \cite{yedidia2001bethe}, 
+\begin{equation}
+F_B(b) = \sum_{i\in V} \left(\int_{\v{y}_i} b_i(\v{y}_i) \frac{(1-|E_i|)\ln
+    b(\v{y}_i)}{\ln \psi_i(\v{y}_i)}\right)  + \sum_{(i,j)\in E} \left(\int_{\v{y}_i, \v{y}_j} b_{ij}(\v{y}_i,
+  \v{y}_j) \ln \frac{b_{ij}(\v{y}_i,
+  \v{y}_j)}{\psi_{ij}(\v{y}_i, \v{y}_j))}\right)
+\label{eqn:bethe-energy} \approx \log Z,
+\end{equation}
+the approximation to the normalizing constant found by loopy belief
+propagation, is precisely zero. Furthermore, this
+optimum is obtained when the pseudomarginals $b_i, b_{ij}$ are
+taken to be the true GP marginals $p_i, p_{ij}$. 
+\end{theorem}
+\begin{proof}
+These claims are established rather directly by substituting the GPRF potentials
+$\psi_i^{GPRF}, \psi_{ij}^{GPRF}$ into (\ref{eqn:bethe-energy}), yielding
+\begin{align}
+F_B(b)&= \sum_{i\in V} KL[b_i \| p_i] + \sum_{(i,j)\in E} KL[b_{ij}\| p_{ij}]
+\end{align}
+where $KL[b\|p] = \int b(\v{x}) \ln \frac{b(\v{x})}{p(\v{x})}d\v{x}$
+is the Kullback-Liebler divergence between distributions $b$ and
+$p$.  This is minimized when the distributions are equal, at which
+point the divergence is zero. Thus, taking $b_i=p_i$and
+$b_{ij}=p_{ij}$ yields the optimal value $F_B=0$.
+\end{proof}
+
+We might have hoped that, as local GPs match the marginal
+distributions of the full GP on individual blocks, perhaps a
+higher-order approximation could match the exact marginals on pairs of
+blocks. This is not possible, since any Gaussian distribution whose
+pairwise marginals match the full GP must in fact be the full GP
+(Gaussians are entirely characterized by their covariances). Instead we
+can view $q_{GPRF}$ as {\em approximately} matching the pairwise
+marginals of the full GP, in the sense that the pseudomarginals found
+by running loopy belief propagation on $q_{GPRF}$ are in fact the true
+marginals of the full GP. This is a consequence of the fact that loopy
+BP converges to stationary points of the Bethe energy
+\cite{yedidia2001bethe}.
+ 
+\bibliographystyle{unsrt}
+{\small \bibliography{refs}}
+
+\end{document}

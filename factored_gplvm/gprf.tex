@@ -40,14 +40,17 @@ Berkeley, CA 94709\\
 
 
 \begin{abstract}
-Gaussian processes have been successful in both supervised and
-unsupervised machine learning tasks, but their cubic complexity has
-constrained practical applications. We introduce a new approximation
-for large-scale Gaussian processes, the Gaussian Process Random Field (GPRF),
-in which local GPs are coupled via pairwise potentials. The GPRF
-likelihood is a simple, tractable, and parallelizeable approximation to the full GP marginal
-likelihood, enabling latent variable modeling and hyperparameter
-selection on large datasets.
+  Gaussian processes have been successful in both supervised and
+  unsupervised machine learning tasks, but their computational
+  complexity has constrained practical applications. We introduce a
+  new approximation for large-scale Gaussian processes, the Gaussian
+  Process Random Field (GPRF), in which local GPs are coupled via
+  pairwise potentials. The GPRF likelihood is a simple, tractable, and
+  parallelizeable approximation to the full GP marginal likelihood,
+  enabling latent variable modeling and hyperparameter selection on
+  large datasets.  We demonstrate its effectiveness on a synthetic
+  spatial dataset as well as a real-world application to seismic event
+  location.
 \end{abstract}
 
 \section{Introduction}
@@ -60,20 +63,19 @@ given a set of outputs and asked to reconstruct the inputs that could
 have produced them. Gaussian processes (GPs) are a flexible class of
 probability distributions on functions that allow us to approach
 function-learning problems from an appealingly principled and clean
-Bayesian perspective. Unfortunately, the cubic time complexity of GP
-inference makes exact GP calculations infeasible for
-datasets larger than approximately $n=10000$ training points,
-excluding many interesting real-world problems.
+Bayesian perspective. Unfortunately, the time complexity of exact GP
+inference is $O(n^3)$, where $n$ is the number of data points. This makes exact GP calculations infeasible for
+real-world data sets with $n > 10000$. 
 
 Many approximations have been
-developed to escape this limitation. One particularly simple approximation is to partition the
-input space into smaller blocks, replacing a single large GP with a
-multitude of local ones. This gains tractability at the
-price of a potentially severe independence assumption. 
+proposed to escape this limitation. One particularly simple
+approximation is to partition the input space into smaller blocks,
+replacing a single large GP with a multitude of local ones. This gains
+tractability at the price of a potentially severe independence assumption. 
 
 In this paper we relax the strong independence assumptions of
 independent local GPs, proposing instead a Markov random field (MRF) of
-local GPs, which we call a Gaussian Process Random Field (GPRF). The
+local GPs, which we call a Gaussian Process Random Field (GPRF). A
 GPRF couples local models via pairwise potentials that incorporate
 covariance information. This yields a surrogate for the full GP
 marginal likelihood that is simple to implement and 
@@ -89,10 +91,11 @@ some existing approximation methods for large-scale GPs. In
 Section~\ref{sec:gprf} we present the GPRF objective and examine its
 properties as an approximation to the full GP marginal likelihood.  We
 then evaluate it on synthetic data as well as an application to seismic event location. 
-
+\vspace{-0.2cm}
 \section{Background}
-
+\vspace{-0.2cm}
 \subsection{Gaussian processes}
+\vspace{-0.2cm}
 Gaussian processes \citep{rasmussen2006} are
 distributions on real-valued functions. Zero-mean GPs are
 parameterized by their covariance function (sometimes called a kernel)
@@ -127,9 +130,9 @@ GPs as a model for unsupervised
 \end{align}
 though some recent work \citep{titsias2010bayesian,
   damianou2014} attempts to recover an
-approximate posterior on $X$ by maximizing a variational bound. This
-maximization can be performed by gradient-based methods if the
-covariance function $k_\theta(\v{x}, \v{x}')$ is differentiable,
+approximate posterior on $X$ by maximizing a variational bound. Given a
+differentiable covariance function, this
+maximization is typically performed by gradient-based methods, 
 although local maxima can be a significant concern as
 the marginal likelihood is generally non-convex.
 
@@ -189,7 +192,7 @@ space. Computationally, each block requires only $O(m^3)$ time; the
 total time is linear in the number of blocks. Local approximations
 preserve short-lengthscale structure, but their harsh independence assumptions can lead to
 predictive discontinuities and inaccurate uncertainties
-(Figure~\ref{fig:local}). These assumptions are especially problematic for
+(Figure~\ref{fig:local}). These assumptions are problematic for
 GP-LVM inference because the marginal likelihood becomes
 non-differentiable at block boundaries. Nonetheless, local GPs sometimes
 work very well in practice, achieving comparable results to more
@@ -337,13 +340,11 @@ general a normalized probability density. It can be interpreted as a
 density is approximated via overlapping pairwise marginals. In the
 special case that the full precision matrix $J_y$ induces a tree
 structure on the blocks of our partition, $q_{GPRF}$ recovers the
-exact marginal likelihood (to see this, pick a root node and rewrite
-the pairwise densities in (\ref{eqn:gprf-naive}) as conditionals given
-a parent). In general this will not be the case, but in the spirit of loopy
+exact marginal likelihood (this is shown in the supplementary material). In general this will not be the case, but in the spirit of loopy
 belief propagation \cite{murphy1999loopy}, we consider the
 tree-structured case as an approximation for the general setting.
 
-Before further considering the nature of the approximation, we first
+Before further analyzing the nature of the approximation, we first
 observe that as a sum of local Gaussian log-densities, the objective (\ref{eqn:gprf-log})
 is straightforward to implement and fast to evaluate. Each of the $O(M^2)$
 pairwise densities requires $O((2m)^3) = O(m^3)$ time, for an overall complexity of
@@ -364,92 +365,34 @@ training data, enabling a simple parallel implementation.
 
 Having seen that $q_{GPRF}$ can be optimized efficiently, it remains
 for us to argue its validity as a proxy for the full GP marginal
-likelihood. In Section~\ref{sec:approx-gaussian}, we show that $q_{GPRF}$ 
-corresponds to an unnormalized Gaussian density with precision matrix
-constructed from the inverses of local covariance matrices instead of
-the full global covariance.  Section~\ref{sec:approx-norm} shows that
-$q_{GPRF}$ is ``approximately normalized'' in the sense of the Bethe
-energy \cite{yedidia2001bethe}, and is constructed such that loopy belief
-propagation on the approximate density recovers the true block and
-pairwise marginals. Section~\ref{sec:approx-predict} shows that {\em
-  conditional} distributions under $q_{GPRF}$ correspond to
-predictions under the Bayesian Committee Machine, leading to a natural
-interpretation of the GPRF model as a ``BCM for the training data''.
+likelihood. Due to space constraints we
+defer proof to the supplementary material, though our results are not
+difficult. We first show that, like the full marginal likelihood (\ref{eqn:mlik}),
+$q_{GPRF}$ has the form of a Gaussian distribution, but with a
+different precision matrix.
 
-
-\subsection{Approximation to the true Gaussian}
-\label{sec:approx-gaussian}
-
-% The unary potentials in this network are simply the GP priors for each
-% block. The pairwise potential for blocks $i,j$ is just the quotient of
-% the joint prior on $\v{y}_i, \v{y}_j$ by the (block-diagonal) prior
-% that assumes the two blocks are independent. These factors are
-% all Gaussian, so the pairwise potential has the form of an
-% (unnormalized) Gaussian density
-% \[\psi_{ij}(\v{y}_i, \v{y}_j) =
-% \log \N\left(\left(\begin{array}{c}\v{y}_i\\ \v{y}_j\end{array}\right); \v{0}, \left(\left(\begin{array}{cc}K_{ii} &
-%     K_{ij}\\K_{ji} & K_{jj}\end{array}\right)^{-1} - \left(\begin{array}{cc}K_{ii} &
-%     \v{0} \\\v{0} & K_{jj}\end{array}\right)^{-1} \right)^{-1}\right)
-% + C\]
-
-% Let \[K_y^{-1} = J = \left(\begin{array}{ccc}J_{11} &\cdots
-%     &J_{1K}\\ \vdots &J_{ij} &\vdots\\J_{K1} &\cdots
-%     \cdots &J_{KK}\\ \end{array}\right)\]
-% denote the precision matrix of the true GP model, blocked according to
-% the data partition. This corresponds to a Markov network with unary
-% potentials $\phi_i(\v{y}_i) = \v{y}_i^T J_{ii}\v{y}_i$ and pairwise
-% potentials $\phi_{ij}(\v{y}_i, \v{y}_j) = \v{y}_i^T
-% J_{ij}\v{y}_j$. 
-
-We begin by showing that $q_{GPRF}$ is an unnormalized Gaussian
-density with a particular precision matrix. For any pair of blocks $(i,j)$, define the {\em local precision  matrix} $Q^{(ij)}$ to be the inverse of the marginal covariance,
-\[Q^{(ij)} = \left(\begin{array}{cc} Q^{(ij)}_{11} &  Q^{(ij)}_{12}\\
-  Q^{(ij)}_{21}  & Q^{(ij)}_{22}\end{array}\right) = \left(\begin{array}{cc} K_{ii} &  K_{ij}\\
-  K_{ji}  & K_{jj}\end{array}\right)^{-1},\]
-The notation $Q^{(ij)}$ is used to distinguish these local precision
-matrices from the blocks $J_{ij}$ of the global precision matrix. Writing (\ref{eqn:gprf-log}) in terms of unnormalized Gaussian densities,
-\begin{align*}
-\log q_{GPRF}(\v{y}) &= -\frac{1}{2} \sum_{i=1}^M (1-|E_i|) \v{y}_i^T
-K_{ii}^{-1} \v{y}_i -\frac{1}{2}  \sum_{(i,j)\in E} \left(\begin{array}{c}
-      \v{y}_i \\ \v{y}_j\end{array}\right)^T Q^{(ij)}\left(\begin{array}{c}
-      \v{y}_i \\
-      \v{y}_j\end{array}\right) + C\\
-&= -\frac{1}{2}\sum_{i=1}^M  \v{y}_i^T \left(K_{ii}^{-1} - |E_i|
-  K_{ii}^{-1}\right)\v{y}_i -\frac{1}{2}  \left(\sum_{(i,j)\in E} \v{y}_i^T
-Q^{(ij)}_{11} \v{y}_i + 2\v{y}_i^T Q^{(ij)}_{12}\v{y}_j + \v{y}_j^T Q^{(ij)}_{22}\v{y}_j\right) + C\\
-&= -\frac{1}{2}\sum_{i=1}^M  \v{y}_i^T \left(K_{ii}^{-1} + \sum_{j\in E_i}
-\left(Q^{(ij)}_{11} - K_{ii}^{-1}\right) \right)\v{y}_i - \sum_{(i,j)\in E}
-\v{y}_i^T Q^{(ij)}_{12} \v{y}_j + C
-\end{align*}
-we obtain the standard form (\ref{eqn:gaussian-mrf}) of a Gaussian
-MRF, showing that $q_{GPRF}$ does in fact induce a Gaussian density on
-$\v{y}$. This
-representation allows us to read off the implicit precision matrix $\tilde{J}$ in block wise form
+\begin{theorem}
+The objective $q_{GPRF}$ has the form an unnormalized Gaussian density
+with precision matrix $\tilde{J}$, with blocks $\tilde{J}_{ij}$ given by
 \begin{equation}
 \tilde{J}_{ii} = K_{ii}^{-1} + \sum_{j\in E_i} \left(Q^{(ij)}_{11}
     - K_{ii}^{-1}\right), \qquad \tilde{J}_{ij} =
   \left\{\begin{array}{ll}Q^{(ij)}_{12} & \text{ if } (i,j) \in E\\0
-    & \text{ otherwise.}\end{array}\right.\label{eqn:approx-precision}
+    & \text{ otherwise.}\end{array}\right),\label{eqn:approx-precision}
 \end{equation}
-We see that the off-diagonal blocks of the precision matrix are simply
-the corresponding blocks of the pairwise local precisions. Each
-diagonal block, by contrast, combines the inverse of the local
-covariance matrix with corrections from the pairwise
-precisions. Note the approximate precision $\tilde{J}$ may not be positive
-definite, in which case $q_{GPRF}$ is not a normalizable density,
-although it is still ``approximately normalized'' in the sense of the next section. 
+where  $Q^{(ij)}$ is the {\em local precision  matrix} $Q^{(ij)}$
+defined as the inverse of the marginal covariance,
+\[Q^{(ij)} = \left(\begin{array}{cc} Q^{(ij)}_{11} &  Q^{(ij)}_{12}\\
+  Q^{(ij)}_{21}  & Q^{(ij)}_{22}\end{array}\right) = \left(\begin{array}{cc} K_{ii} &  K_{ij}\\
+  K_{ji}  & K_{jj}\end{array}\right)^{-1}.\]
+\end{theorem}
 
-\subsection{Approximate normalization}
-\label{sec:approx-norm}
+Although the Gaussian density represented by $q_{GPRF}$ is not in general normalized, we show that it is {\em
+  approximately} normalized in a certain sense. 
 
-Although $q_{GPRF}$ is proportional to a Gaussian density, it is not
-in general normalized, and computing the true normalizing constant
-(when such exists) involving the determinant of $\tilde{J}$ would seem to require
-cubic time. We show
-that $q_{GPRF}$ is {\em approximately} normalized in the sense that
+\begin{theorem}
+The objective $q_{GPRF}$ is approximately normalized in the sense that
 the optimal value of the {\em Bethe free energy} \cite{yedidia2001bethe}, 
-
-%\cite{http://www.stat.ucla.edu/~sczhu/workshops/sctv01/TR2001-16.pdf,(6)} 
 \begin{equation}
 F_B(b) = \sum_{i\in V} \left(\int_{\v{y}_i} b_i(\v{y}_i) \frac{(1-|E_i|)\ln
     b(\v{y}_i)}{\ln \psi_i(\v{y}_i)}\right)  + \sum_{(i,j)\in E} \left(\int_{\v{y}_i, \v{y}_j} b_{ij}(\v{y}_i,
@@ -461,30 +404,10 @@ the approximation to the normalizing constant found by loopy belief
 propagation, is precisely zero. Furthermore, this
 optimum is obtained when the pseudomarginals $b_i, b_{ij}$ are
 taken to be the true GP marginals $p_i, p_{ij}$. 
+\end{theorem}
 
-These claims are established rather directly by substituting the GPRF potentials
-$\psi_i^{GPRF}, \psi_{ij}^{GPRF}$ into (\ref{eqn:bethe-energy}), yielding
-\begin{align}
-F_B(b)&= \sum_{i\in V} KL[b_i \| p_i] + \sum_{(i,j)\in E} KL[b_{ij}\| p_{ij}]
-\end{align}
-where $KL[b\|p] = \int b(\v{x}) \ln \frac{b(\v{x})}{p(\v{x})}d\v{x}$
-is the Kullback-Liebler divergence between distributions $b$ and
-$p$.  This is minimized when the distributions are equal, at which
-point the divergence is zero. Thus, taking $b_i=p_i$and
-$b_{ij}=p_{ij}$ yields the optimal value $F_B=0$.
-
-We might have hoped that, as local GPs match the marginal
-distributions of the full GP on individual blocks, perhaps a
-higher-order approximation could match the exact marginals on pairs of
-blocks. This is not possible, since any Gaussian distribution whose
-pairwise marginals match the full GP must in fact be the full GP
-(Gaussians are entirely characterized by their covariances). Instead we
-can view $q_{GPRF}$ as {\em approximately} matching the pairwise
-marginals of the full GP, in the sense that the pseudomarginals found
-by running loopy belief propagation on $q_{GPRF}$ are in fact the true
-marginals of the full GP. This is a consequence of the fact that loopy
-BP converges to stationary points of the Bethe energy
-\cite{yedidia2001bethe}.
+This implies that loopy belief propagation run on a GPRF
+would recover the marginals of the full GP.
 
 \subsection{Predictive equivalence to the BCM}
 \label{sec:approx-predict}
@@ -503,7 +426,7 @@ p_{GPRF}(\v{f}^* | \v{y}) \propto q_{GPRF}(\v{f}^*, \v{y})
  % \v{f}^*)}{p(\v{y}_i) p(\v{f}^*)} \nonumber\\
 &=p(\v{f}^*)^{1-M} \prod_{i=1}^M p(\v{f}^* | \v{y}_i),
 \end{align}
-turns out to correspond exactly to the prediction of 
+corresponds exactly to the prediction of 
 the Bayesian Committee Machine (BCM) \citep{tresp2000bayesian}. This motivates the
 GPRF as a natural extension of the BCM as a model for the training
 set, providing an alternative to the standard transductive
@@ -519,11 +442,12 @@ form of a BCM prediction, suggesting the possibility of
 {\em pseudolikelihood} training \cite{besag1975statistical}, i.e.,
 directly optimizing the quality of BCM predictions on held-out blocks
 (not explored in this paper).
-\vspace{-.2cm}
+
+
 \section{Experiments}
-\vspace{-.2cm}
+
 \subsection{Uniform Input Distribution}
-\vspace{-.2cm}
+
 We first consider a 2D synthetic dataset intended to simulate spatial location tasks such as WiFi-SLAM
 \cite{ferris2007wifi} or seismic event location (below), in which we
 observe high-dimensional measurements but have only noisy information
@@ -565,7 +489,7 @@ GP-LVM optimization could nontrivially improve the initial noisy locations. Figu
 \caption{Inferred locations on synthetic data
   ($n=10000$), colored by the first output dimension $\v{y}_1$. }
 \label{fig:synth_data}
-\vspace{-.3cm}
+
 \end{figure}
 
 % \begin{subfigure}[t]{.32\textwidth}
@@ -609,7 +533,6 @@ approach for all experiments.
          \end{subfigure}
 \caption{Results on synthetic data.}
 \label{fig:synthresults}
-\vspace{-0.5cm}
 \end{figure} 
 
 For comparison, we also evaluate the Sparse GP-LVM, implemented in GPy
@@ -618,7 +541,7 @@ marginal likelihood \cite{lawrence2007learning}. Here the
 approximation parameter $m$ is the number of inducing points. 
 
 We ran L-BFGS optimization to recover MAP
-locations (or a local optima thereof). Figure \ref{fig:truegp} shows
+locations (or local optima thereof). Figure \ref{fig:truegp} shows
 mean location error (Euclidean distance) for $n=10000$ points; at this
 size it is tractable to compare directly to the full GP-LVM. The GPRF
 with a large block size ($m$=1111, corresponding to a 3x3 grid) nearly matches the solution
@@ -671,9 +594,8 @@ solutions (Figure \ref{fig:eighty}). After a short initial period, the
 best performance always belongs to a GPRF, and at the conclusion of 24 hours the best GPRF
 solution achieves mean error 42\% lower than the best local
 solution (0.18 vs 0.31).
-\vspace{-0.2cm}
+
 \subsection{Seismic event location}
-\vspace{-0.2cm}
  \begin{figure}
  \centering
   \begin{subfigure}[t]{.50\textwidth}
@@ -688,7 +610,6 @@ solution (0.18 vs 0.31).
           \end{subfigure}
  \caption{Seismic event location task.}
  \label{fig:seismic}
-\vspace{-0.7cm}
  \end{figure}
 
 We next consider an application to seismic event location, which formed the
@@ -738,9 +659,9 @@ partition ($m=800$) for both local GPs and the GPRF, this ``hybrid'' method
 gives the lowest final error (12.2km), and is dominant across a wide
 range of wall clock times, suggesting it as a promising
 practical approach for large GP-LVM optimizations. 
-\vspace{-0.3cm}
+
 \section{Conclusions and Future Work}
-\vspace{-0.4cm}
+
 The Gaussian process random field is a tractable and effective
 surrogate for the GP marginal likelihood. It has the flavor of
 approximate inference methods such as loopy belief propagation, but
@@ -768,9 +689,9 @@ when the density of available data in some region of the space
 exceeds what is necessary to represent the function -- an integrated
 method might enable new applications for which neither approach alone
 would be sufficient. 
-\vspace{-0.4cm}
+
 \subsubsection*{Acknowledgements}
-\vspace{-0.2cm}
+
 We thank the anonymous reviewers for their helpful 
 suggestions.  This work was supported by DTRA grant \#HDTRA-11110026,
 and by computing resources donated by Microsoft Research under an Azure for Research grant.
