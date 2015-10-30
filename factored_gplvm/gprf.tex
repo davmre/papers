@@ -5,10 +5,10 @@
 \usepackage{amssymb}
 \usepackage{amsthm}
 \usepackage{url}
-\usepackage{fullpage}
 \usepackage{natbib}
 \usepackage{subcaption}
 \usepackage{graphicx}
+\usepackage{microtype}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
@@ -18,14 +18,26 @@
 \newcommand{\I}{\mathcal{I}}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\tr}{\text{tr}}
+\newcommand{\cov}{\text{cov}}
 \newcommand{\eps}{\varepsilon}
 \renewcommand{\v}[1]{\mathbf{#1}}
+
+\nipsfinalcopy
 
 \begin{document}
 
 \title{Gaussian Process Random Fields}
-\author{David Moore and Stuart Russell}
+
+\author{
+David A. Moore and Stuart J. Russell\\
+Computer Science Division\\
+University of California, Berkeley\\
+Berkeley, CA 94709\\
+\texttt{\{dmoore, russell\}@cs.berkeley.edu} 
+}
+
 \maketitle
+
 
 \begin{abstract}
 Gaussian processes have been successful in both supervised and
@@ -34,25 +46,24 @@ constrained practical applications. We introduce a new approximation
 for large-scale Gaussian processes, the Gaussian Process Random Field (GPRF),
 in which local GPs are coupled via pairwise potentials. The GPRF
 likelihood is a simple, tractable, and parallelizeable approximation to the full GP marginal
-likelihood, enabling hyperparameter selection and latent variable
-modeling on large datasets.
+likelihood, enabling latent variable modeling and hyperparameter
+selection on large datasets.
 \end{abstract}
 
 \section{Introduction}
 
-Many machine learning tasks can be framed as learning a function
-given its values at a set of training points. In regression and
-classification, these values are observed explicitly; in less-supervised
-settings such as latent variable modeling or reinforcement learning,
-some aspects of the observations may be available only implicitly. As
-a flexible class of probability distributions on functions,  Gaussian
-processes (GPs) allow us to approach function-learning problems from
-an appealing principled and clean Bayesian perspective.
-
-Unfortunately, practical applications have been constrained by the the cubic time complexity of GP inference with respect
-to the number of training points. Exact GP calculations are generally
-infeasible for datasets larger than approximately $n=5000$, excluding
-many interesting real-world problems. 
+Many machine learning tasks can be framed as learning a function given
+(potentially noisy) information about its inputs and outputs. In
+regression and classification, we are given inputs and asked to
+predict the outputs; by contrast, in latent variable modeling we are
+given a set of outputs and asked to reconstruct the inputs that could
+have produced them. Gaussian processes (GPs) are a flexible class of
+probability distributions on functions that allow us to approach
+function-learning problems from an appealingly principled and clean
+Bayesian perspective. Unfortunately, the cubic time complexity of GP
+inference makes exact GP calculations infeasible for
+datasets larger than approximately $n=10000$ training points,
+excluding many interesting real-world problems.
 
 Many approximations have been
 developed to escape this limitation. One particularly simple approximation is to partition the
@@ -65,7 +76,7 @@ independent local GPs, proposing instead a Markov random field (MRF) of
 local GPs, which we call a Gaussian Process Random Field (GPRF). The
 GPRF couples local models via pairwise potentials that incorporate
 covariance information. This yields a surrogate for the full GP
-marginal likelihood which is simple to implement and 
+marginal likelihood that is simple to implement and 
 can be tractably evaluated and optimized on
 large datasets, while still enforcing a smooth covariance
 structure. The task of approximating the marginal likelihood is
@@ -77,54 +88,50 @@ We begin by reviewing Gaussian processes and Markov random fields, and
 some existing approximation methods for large-scale GPs. In
 Section~\ref{sec:gprf} we present the GPRF objective and examine its
 properties as an approximation to the full GP marginal likelihood.  We
-then evaluate it on synthetic and real-world datasets, in particular
-an application to seismic event location. 
+then evaluate it on synthetic data as well as an application to seismic event location. 
 
 \section{Background}
 
 \subsection{Gaussian processes}
 Gaussian processes \citep{rasmussen2006} are
-distributions on random functions. A GP is parameterized by a mean function
-$\mu_\theta(\v{x})$ and a covariance, or kernel, function $k_\theta(\v{x},
-\v{x}')$; these may themselves have hyperparameters $\theta$. Typically we assume the data has been pre-centered so that
-we may choose $\mu(\v{x})=0$. A common family of covariances is the squared
-exponential, $k_{SE}(\v{x}, \v{x}') =
-\sigma^2_f\exp\left(-\frac{\|\v{x}-\v{x}'\|^2}{2\ell^2}\right)$, in
-which the hyperparameters $\sigma^2_f$  and $\ell$ specify a prior variance
-and correlation lengthscale respectively.
+distributions on real-valued functions. Zero-mean GPs are
+parameterized by their covariance function (sometimes called a kernel)
+$k_\theta(\v{x}, \v{x}')$,  where $\theta$ denotes the covariance hyperparameters. A common choice is the squared
+exponential covariance, $k_{SE}(\v{x}, \v{x}') =
+\sigma^2_f\exp\left(-\frac{1}{2}\|\v{x}-\v{x}'\|^2 / \ell^2\right)$, with
+hyperparameters $\sigma^2_f$  and $\ell$ specifying respectively a
+prior variance and correlation lengthscale. 
 
 We say that a random function $f(x)$ is Gaussian process distributed if, for
-any set of $n$ input points $X$, the vector of function values $\v{f} = f(X)$ is
-multivariate Gaussian, $\v{f} \sim \N(\v{0}, k(X, X)).$ In many applications we
-have access only to noisy observations $\v{y}$, where we commonly
-assume the noise is iid Gaussian, \[\v{y} = \v{f} + \v{\eps},
-\qquad \v{\eps}\sim \N(\v{0}, \sigma_n^2 \I).\] In this case the
-observations are themselves Gaussian, $\v{y} \sim \N(\v{0}, K_y)$, where $K_y = k_\theta(X, X) + \sigma^2_n\I$. 
+any $n$ input points $X$, the vector of function values $\v{f} = f(X)$ is
+multivariate Gaussian, $\v{f} \sim \N(\v{0}, k_\theta(X, X)).$ In many applications we
+have access only to noisy observations $\v{y} = \v{f} + \v{\eps}$ for some
+noise process $\v{\eps}$. If the noise is iid Gaussian, $\v{\eps}\sim
+\N(\v{0}, \sigma_n^2 \I)$, then the observations are themselves Gaussian, $\v{y} \sim \N(\v{0}, K_y)$, where $K_y = k_\theta(X, X) + \sigma^2_n\I.$
 
-Bayesian regression \cite{rasmussen2006} is the most common application of GPs: we attempt to predict the
-function at test points $X^*$ via the conditional distribution
-$p(\v{f}^* | \v{y}; X, \theta)$ given the training data. Sometimes, however, we do not observe the training inputs $X$, or
-observe them only partially or noisily, in which case the standard regression
-formulation does not apply. This setting is known as the Gaussian Process
+The most common application of GPs is to Bayesian regression
+\cite{rasmussen2006}, in which we attempt to predict the
+function values $\v{f}^*$ at test points $X^*$ via the conditional
+distribution given the training
+data, $p(\v{f}^* | \v{y}; X, X^*, \theta)$. Sometimes, however, we do not observe the training inputs $X$,
+or we observe them only partially or noisily. This setting is known as the Gaussian Process
 Latent Variable Model (GP-LVM)  \cite{lawrence2004gaussian}; it uses
 GPs as a model for unsupervised
-  learning and nonlinear dimensionality reduction. GP-LVM
-  observations are typically multi-dimensional, $Y = (\v{y}^{(1)}, \ldots,
-  \v{y}^{(D)})$, with each dimension $\v{y}^{(d)}$ modeled as an
-  independent Gaussian process. The input locations are typically sought via maximization of the {\em marginal likelihood}
+  learning and nonlinear dimensionality reduction. The GP-LVM
+  setting typically involves multi-dimensional observations, $Y = (\v{y}^{(1)}, \ldots,
+  \v{y}^{(D)})$, with each output dimension $\v{y}^{(d)}$ modeled as an
+  independent Gaussian process. The input locations and/or hyperparameters are typically sought via maximization of the {\em marginal likelihood}
 \begin{align}
-\mathcal{L}(X, \theta) &= \log p(Y ; X, \theta) \nonumber\\
-&= \sum_{i=1}^D -\frac{1}{2}\log |K_y| - \frac{1}{2} \v{y}_i^T K_y^{-1} \v{y}_i + C\nonumber\\
+\mathcal{L}(X, \theta) = \log p(Y ; X, \theta) &= \sum_{i=1}^D -\frac{1}{2}\log |K_y| - \frac{1}{2} \v{y}_i^T K_y^{-1} \v{y}_i + C\nonumber\\
 &= -\frac{D}{2}\log |K_y| - \frac{1}{2}\tr(K_y^{-1} YY^T) + C,\label{eqn:mlik}
 \end{align}
-though recent work \citep{titsias2010bayesian,
-  damianou2014} attempts to recover a variational posterior. If the
-covariance function $k_\theta(\v{x}, \v{x}')$ is differentiable
-with respect to $\v{x}$ and/or $\theta$, this maximization can be
-performed by gradient-based methods, although care is required in the
-initialization as the marginal likelihood is generally non-convex.
-Selection of kernel hyperparameters $\theta$, for the pure regression setting and/or the
-GP-LVM, can also be accomplished via maximization of $\mathcal{L}$.
+though some recent work \citep{titsias2010bayesian,
+  damianou2014} attempts to recover an
+approximate posterior on $X$ by maximizing a variational bound. This
+maximization can be performed by gradient-based methods if the
+covariance function $k_\theta(\v{x}, \v{x}')$ is differentiable,
+although local maxima can be a significant concern as
+the marginal likelihood is generally non-convex.
 
 \subsection{Scalability and approximate inference}
 \label{sec:approx}
@@ -136,38 +143,35 @@ GP-LVM, can also be accomplished via maximization of $\mathcal{L}$.
                 \includegraphics[width=\textwidth]{toy_gp_posterior}
                 \caption{Full GP. }
                 \label{fig:gp}
-        \end{subfigure}
-\qquad
+        \end{subfigure}\hspace{0.5em}
 \begin{subfigure}[t]{.30\textwidth}
   \includegraphics[width=\textwidth]{toy_lgp_posterior}
   \caption{Local GPs.}
   \label{fig:local}
-\end{subfigure}
-\qquad
+\end{subfigure}\hspace{0.5em}
 \begin{subfigure}[t]{.30\textwidth}
   \includegraphics[width=\textwidth]{toy_bcm_posterior}
   \caption{Bayesian committee machine.}
   \label{fig:bcm}
 \end{subfigure}
-\caption{Predictive distributions on a toy regression problem. The BCM
-is operating in its worst-case mode of predicting each test marginal
-separately.}
+\caption{Predictive distributions on a toy regression problem.}
 \label{fig:approx}
-\end{figure}
+\end{figure} 
 
-The main computational difficulty in Gaussian process methods is
-the need to invert or factor the kernel matrix $K_y$, which is cubic
+
+The main computational difficulty in GP methods is
+the need to invert or factor the kernel matrix $K_y$, which requires time cubic
 in $n$. In GP-LVM inference this must be done at every optimization step to evaluate
 (\ref{eqn:mlik}) and its derivatives.
 
 This complexity has inspired
 a number of approximations. The most commonly studied are inducing
-point methods, in which the unknown functions are
-represented by their values at a small set of $m$ inducing
+point methods, in which the unknown function is
+represented by its values at a set of $m$ inducing
 points, where $m \ll n$. These points can be chosen by maximizing the marginal
 likelihood in a surrogate model \citep{quinonero2005, lawrence2007learning} or by
-minimizing the KL divergence to the full GP
-\citep{titsias2009variational}. Inference in these models can
+minimizing the KL divergence between the approximate and exact GP posteriors
+\citep{titsias2009variational}. Inference in such models can
 typically be done in $O(nm^2)$ time, but this comes at the price
 of reduced representational capacity: while smooth functions with long lengthscales may
 be compactly represented by a small number of inducing points, for
@@ -184,7 +188,7 @@ between function values in different regions of the input
 space. Computationally, each block requires only $O(m^3)$ time; the
 total time is linear in the number of blocks. Local approximations
 preserve short-lengthscale structure, but their harsh independence assumptions can lead to
-predictive discontinuities and inaccurate covariances
+predictive discontinuities and inaccurate uncertainties
 (Figure~\ref{fig:local}). These assumptions are especially problematic for
 GP-LVM inference because the marginal likelihood becomes
 non-differentiable at block boundaries. Nonetheless, local GPs sometimes
@@ -193,19 +197,30 @@ sophisticated methods while requiring only a fraction of the time \cite{chalupka
 
 The Bayesian Committee Machine (BCM) \cite{tresp2000bayesian} attempts
 to improve on independent local GPs by averaging the predictions of
-multiple GP experts. The model is formally equivalent to an inducing point model
-in which the {\em test points} are the inducing points, i.e., it
-assumes that the training blocks are conditionally independent given
-the test data. The BCM can yield high-quality predictions that avoid the
-pitfalls of local GPs (Figure~\ref{fig:bcm})
-\cite{schwaighofer2002transductive}, while maintaining scalability to
-very large datasets \cite{deisenroth2015distributed}. However, as a
-purely predictive approximation, it is unhelpful in the latent
-variable model setting, where we are interested in the likelihood of
-our training set irrespective of any particular test data.  The desire
-for a BCM-style likelihood approximation was part of the motivation
-for this current work; Section~\ref{sec:approx-predict} shows that the GPRF
-proposed in this paper can be viewed as such a model. 
+multiple GP experts. The model is formally equivalent to an inducing
+point model in which the {\em test points} are the inducing points,
+i.e., it assumes that the training blocks are conditionally
+independent given the test data. The BCM can yield high-quality
+predictions that avoid the pitfalls of local GPs
+(Figure~\ref{fig:bcm}), while
+maintaining scalability to very large datasets
+\cite{deisenroth2015distributed}. However, as a purely predictive
+approximation, it is unhelpful in the GP-LVM setting, where we are
+interested in the likelihood of our training set irrespective of any
+particular test data.  The desire for a BCM-style approximation to the
+marginal likelihood was part of the motivation for this current work;
+in Section~\ref{sec:approx-predict} we show that the GPRF proposed in this
+paper can be viewed as such a model.
+
+Mixture-of-experts models \cite{rasmussen2002infinite, nguyen2014fast}
+extend the local GP concept in a different direction: instead of
+deterministically assigning points to GP models based on their spatial
+locations, they treat the assignments as unobserved random variables
+and do inference over them. This allows the model to adapt to different
+functional characteristics in different regions of the space, at the
+price of a more difficult inference task. We are not aware of
+mixture-of-experts models being applied in the GP-LVM setting, though
+this should in principle be possible.
 
 Simple building blocks are often combined to create more complex
 approximations. 
@@ -219,26 +234,30 @@ variation in concert with global inducing points. \cite{chalupka2012} surveys an
 several approximate GP regression methods on synthetic and real-world
 datasets. 
 
-We also note here the similar title of \cite{zhong2010gaussian}, which uses a {\em
-  latent} random field as a prior on locations to a GP-LVM. By
-contrast, our work defines a random field decomposition of the outputs
-$\v{y}$, and can be combined with any prior on $X$. 
+We finally note here the similar title of \cite{zhong2010gaussian},
+which is in fact orthogonal to the present work: they use a random
+field as a {\em prior} on input locations, whereas this paper defines a
+random field decomposition of the GP model itself, which may be
+combined with any prior on $X$.
 
 \subsection{Markov Random Fields}
 
 We recall some basic theory regarding Markov random fields
 (MRFs), also known as undirected graphical models \cite{koller2009probabilistic}. A pairwise
 MRF consists of an undirected graph $(V, E)$, along with {\em node potentials} $\psi_i$ and {\em edge
-potentials} $\psi_{ij}$, which define an {\em energy function} 
+potentials} $\psi_{ij}$, which define an {\em energy function} on a random vector $\v{y}$,
 \begin{equation}
 E(\v{y}) = \sum_{i\in V} \psi_{i}(\v{y}_i) + \sum_{(i,j)\in E}
-\psi_{ij}(\v{y}_i, \v{y}_j).\label{eqn:mrf}
+\psi_{ij}(\v{y}_i, \v{y}_j),\label{eqn:mrf}
 \end{equation}
-Normalizing this energy yields a probability distribution (the ``Gibbs
-distribution''), $p(\v{y}) = \frac{1}{Z}\exp(-E(\v{y}))$, where $Z = \int \exp(-E(\v{z})) d\v{z}$ is the normalizing constant. 
+where $\v{y}$ is partitioned into components
+$\v{y}_i$ identified with nodes in the graph. Normalizing
+this energy yields a probability density (the ``Gibbs
+distribution'') $p(\v{y}) = \frac{1}{Z}\exp(-E(\v{y}))$, with
+normalizing constant $Z = \int \exp(-E(\v{z})) d\v{z}$.
 
 Gaussian random fields are a special case of pairwise MRFs in which
-the variables $\v{y}$ follow a joint Gaussian distribution. Given a partition of
+the Gibbs distribution is multivariate Gaussian. Given a partition of
 $\v{y}$ into sub-vectors $\v{y}_1, \v{y}_2, \ldots, \v{y}_M$, a
 zero-mean Gaussian distribution with covariance $K$ and precision
 matrix $J = K^{-1}$ can
@@ -251,95 +270,46 @@ J_{ii} \v{y}_i, \qquad\psi_{ij}(\v{y}_i, \v{y}_j) = -\v{y}_i^T J_{ij}
 to the sub-vectors $\v{y}_i$, $\v{y}_j$. The
 normalizing constant $Z =
 (2\pi)^{n/2}|K|^{1/2}$ involves the determinant of the covariance
-matrix. Since edges whose potentials are zero do not affect the energy
-and can be dropped without effect, the sparsity pattern of the
-precision matrix can be seen as specifying the set of edges missing
-from the graph. 
-
-
-% \subsection{Other Related Work}
-
-% {\bf TODO} {\em this will probably be folded into ``scalability and
-%   approximate inference}
-
-% http://arxiv.org/pdf/1502.02843.pdf 
-% - distributed GP predictions using the BCM (ICML 2015), no story for
-% training
-
-
-% http://arxiv.org/pdf/1402.1389.pdf
-% ``Distributed Variational Inference in Sparse Gaussian
-% Process Regression and Latent Variable Models''
-% - an inducing point method, mostly interesting because maybe we could
-% beat its experimental results. 
-
-% https://www.aaai.org/ocs/index.php/AAAI/AAAI10/paper/viewFile/1934/2062
-% ``Gaussian Process Latent Random Field'' (AAAI 2010)
-%  - puts a MRF prior on the *X* values, not the Y values
-
-
-% http://papers.nips.cc/paper/2230-transductive-and-inductive-methods-for-approximate-gaussian-process-regression.pdf
-%  - does BCM prediction on large datasets
-%  - useful as a BCM reference and as a source of experimental ideas
-
-% https://archive.ics.uci.edu/ml/datasets/UJIIndoorLoc: wifi location dataset
-
-% http://www2.informatik.uni-freiburg.de/~plagem/bib/plagemann08ecml.pdf
-% - does nonstationary regression with MAP values of latent
-% lengthscales. Basically the same as what I'm doing, but without the
-% block decomposition, and essentially representing the lengthscale GP
-% with a small number of ``inducing points''
-
-% % commented out for compilation
-% %http://www.stats.ox.ac.uk/~cholmes/Reports/partition_spatial_gp.pdf
-% %- uses local GPs, with RJMCMC to search over the number and location
-% %of the blocks
-
-% http://arxiv.org/pdf/0710.4536.pdf
-% - does something similar, with a tree structure on the local GPs
-
-% %http://homepages.inf.ed.ac.uk/imurray2/pub/13gp_compare/gp_compare.pdf
-% %- compares approximate GP methods including local GPs (with local GP
-% %results on SARCOS! and suggestions about how to select clusters)
-
-% %
-
-% %- tree structure on blocks of inducing points. 
-
-% 
+matrix. Since edges whose potentials are zero can be dropped without
+effect, the nonzero entries of the precision matrix can be seen as
+specifying the edges present in the graph. 
 
 
 \section{Gaussian Process Random Fields}
 \label{sec:gprf}
 
-We consider a vector of $n$ real-valued observations $\v{y} \sim
-\N(\v{0}, K_y)$  modeled by a GP (the generalization to
-multiple independent outputs $Y$ is straightforward),
-where $K_y$ is implicitly a function of input locations $X$ and hyperparameters $\theta$. Unless otherwise specified, all probabilities $p(\v{y}_i),
-p(\v{y}_i, \v{y}_j)$, etc. refer to marginals of this full GP. We
-would like to perform gradient-based optimization on the marginal
-likelihood (\ref{eqn:mlik}) with respect to $X$ and/or $\theta$, but suppose that the cost of doing so directly is prohibitive.
+We consider a vector of $n$ real-valued\footnote{The extension to
+  multiple independent outputs is straightforward.} observations
+$\v{y} \sim \N(\v{0}, K_y)$ modeled by a GP, where $K_y$ is implicitly
+a function of input locations $X$ and hyperparameters $\theta$. Unless
+otherwise specified, all probabilities $p(\v{y}_i), p(\v{y}_i,
+\v{y}_j)$, etc. refer to marginals of this full GP. We would like to
+perform gradient-based optimization on the marginal likelihood
+(\ref{eqn:mlik}) with respect to $X$ and/or $\theta$, but suppose that
+the cost of doing so directly is prohibitive.
 
-In order to proceed, we assume a partition $\v{y} = (\v{y}_1, \v{y}_2, \ldots,
-\v{y}_M)$ of the observations into $M$ blocks of size at most $m$, with an
-implied corresponding partition $X = (X_1, X_2, \ldots, X_M)$ of the
-(perhaps unobserved) inputs. The source of this partition is not a focus of the current
-work; we might imagine that the blocks correspond to 
-spatially local clusters of input points, assuming that we have noisy
-observations of the $X$ values or at least a reasonable guess at an initialization. We let $K_{ij} =
-cov_\theta(\v{y}_i, \v{y}_j)$ denote the appropriate submatrix of
-$K_{y}$, and $J_{ij}$ denote the corresponding submatrix of the
-precision matrix $J_y=K_y^{-1}$; note that $J_{ij} \ne K_{ij}^{-1}$ in general. 
+In order to proceed, we assume a partition $\v{y} = (\v{y}_1, \v{y}_2,
+\ldots, \v{y}_M)$ of the observations into $M$ blocks of size at most
+$m$, with an implied corresponding partition $X = (X_1, X_2, \ldots,
+X_M)$ of the (perhaps unobserved) inputs. The source of this partition
+is not a focus of the current work; we might imagine that the blocks
+correspond to spatially local clusters of input points, assuming that
+we have noisy observations of the $X$ values or at least a reasonable
+guess at an initialization. We let $K_{ij} = \cov_\theta(\v{y}_i,
+\v{y}_j)$ denote the appropriate submatrix of $K_{y}$, and $J_{ij}$
+denote the corresponding submatrix of the precision matrix
+$J_y=K_y^{-1}$; note that $J_{ij} \ne (K_{ij})^{-1}$ in general.
 
 \subsection{The GPRF Objective}
 
-Given the precision matrix $J_y$, we could use (\ref{eqn:gaussian-mrf})
-to represent the full GP in factored form as an MRF. This is not
-directly useful, since computing $J_y$ requires cubic time. Instead we
-propose approximating the marginal likelihood via a random field in
-which local GPs are connected by pairwise potentials. Given an edge
-set $E$ which we will initially take to be the complete graph, $E
-=\{(i,j) | 1\le i < j \le M\}$, our approximate objective is
+Given the precision matrix $J_y$, we could use
+(\ref{eqn:gaussian-mrf}) to represent the full GP distribution in
+factored form as an MRF. This is not directly useful, since computing
+$J_y$ requires cubic time. Instead we propose approximating the
+marginal likelihood via a random field in which local GPs are
+connected by pairwise potentials. Given an edge set which we will
+initially take to be the complete graph, $E =\{(i,j) | 1\le i < j \le
+M\}$, our approximate objective is
 \begin{align}
 q_{GPRF}(\v{y}; X, \theta)&= \prod_{i=1}^M p(\v{y}_i) 
 \prod_{(i,j)\in E} \frac{p(\v{y}_i, \v{y}_j)}{p(\v{y}_i) p(\v{y}_j)},\label{eqn:gprf-naive}\\
@@ -360,30 +330,31 @@ with potentials
 \psi_i^{GPRF}(\v{y}_i) = (1-|E_i|)\log p(\v{y}_i), \qquad \psi_{ij}^{GPRF}(\v{y}_i, \v{y}_j) =
 \log p(\v{y}_i, \v{y}_j).\end{equation}
 
-We refer to the approximate objective (\ref{eqn:gprf-log}) as $q_{GPRF}$ rather than $p_{GPRF}$
-to emphasize that it is not in general a normalized probability
-density. It can be interpreted as a ``Bethe-type'' approximation
-\cite{yedidia2001bethe}, in which a joint density is approximated via overlapping pairwise marginals. In the special
-case that the full precision matrix $J_y$ induces a tree structure on
-the blocks of our partition, $q_{GPRF}$ recovers the exact marginal likelihood (to
-see this, pick a root node and rewrite the pairwise densities in
-(\ref{eqn:gprf-naive}) as
-conditionals given a parent). For most datasets and covariance
-functions this will not be the case, but in the spirit of loopy belief propagation \cite{murphy1999loopy}, we 
-consider the tree-structured case as an approximation for the general setting.
+We refer to the approximate objective (\ref{eqn:gprf-log}) as
+$q_{GPRF}$ rather than $p_{GPRF}$ to emphasize that it is not in
+general a normalized probability density. It can be interpreted as a
+``Bethe-type'' approximation \cite{yedidia2001bethe}, in which a joint
+density is approximated via overlapping pairwise marginals. In the
+special case that the full precision matrix $J_y$ induces a tree
+structure on the blocks of our partition, $q_{GPRF}$ recovers the
+exact marginal likelihood (to see this, pick a root node and rewrite
+the pairwise densities in (\ref{eqn:gprf-naive}) as conditionals given
+a parent). In general this will not be the case, but in the spirit of loopy
+belief propagation \cite{murphy1999loopy}, we consider the
+tree-structured case as an approximation for the general setting.
 
 Before further considering the nature of the approximation, we first
 observe that as a sum of local Gaussian log-densities, the objective (\ref{eqn:gprf-log})
 is straightforward to implement and fast to evaluate. Each of the $O(M^2)$
-pairwise densities requires $O((2m)^3) = O(m^3)$ time to evaluate, for an overall complexity of
+pairwise densities requires $O((2m)^3) = O(m^3)$ time, for an overall complexity of
 $O(M^2m^3) = O(n^2m)$ when $M=n/m$. The quadratic dependence on $n$ cannot
 be avoided by any algorithm that computes similarities between all
-pairs of training points; however, in practice we can consider ``local''
+pairs of training points; however, in practice we will consider ``local''
 modifications in which $E$ is something smaller than all
-pairs of blocks. For example, if the blocks follow a spatial grid structure and
-each block is connected only to its neighbors, the complexity reduces
-to $O(nm^2)$ which is linear in $n$. In the special case where $E$ is the empty
-set, we recover the exact likelihood of independent local GPs.
+pairs of blocks. For example, if each block is connected only to a
+fixed number of spatial neighbors, the complexity reduces
+to $O(nm^2)$, i.e., linear in $n$. In the special case where $E$ is
+the empty set, we recover the exact likelihood of independent local GPs.
 
 It is also straightforward to obtain the gradient of
 (\ref{eqn:gprf-log}) with respect to hyperparameters $\theta$ and inputs $X$, by summing
@@ -464,22 +435,16 @@ We see that the off-diagonal blocks of the precision matrix are simply
 the corresponding blocks of the pairwise local precisions. Each
 diagonal block, by contrast, combines the inverse of the local
 covariance matrix with corrections from the pairwise
-precisions. 
-%{\em Because $q_{GPRF}$ is defined in terms of marginals of the
-%full GP, the approximate precision $\tilde{J}$ is guaranteed to be positive
-%definite by the pairwise normalization condition given in
-%\cite{koller, ch 7}. {\bf TODO: work this out more carefully, is it
- % really true?}}
-
-%{\bf TODO: investigate this approximation empirically? maybe sample a
-%  bunch of covariances from a Wishart prior, and look at KL divergence
-% between the true Gaussian and the Gaussian with this precision?}
+precisions. Note the approximate precision $\tilde{J}$ may not be positive
+definite, in which case $q_{GPRF}$ is not a normalizable density,
+although it is still ``approximately normalized'' in the sense of the next section. 
 
 \subsection{Approximate normalization}
 \label{sec:approx-norm}
 
 Although $q_{GPRF}$ is proportional to a Gaussian density, it is not
-in general normalized, and computing the true normalizing constant involving the determinant of $\tilde{J}$ would seem to require
+in general normalized, and computing the true normalizing constant
+(when such exists) involving the determinant of $\tilde{J}$ would seem to require
 cubic time. We show
 that $q_{GPRF}$ is {\em approximately} normalized in the sense that
 the optimal value of the {\em Bethe free energy} \cite{yedidia2001bethe}, 
@@ -521,26 +486,21 @@ marginals of the full GP. This is a consequence of the fact that loopy
 BP converges to stationary points of the Bethe energy
 \cite{yedidia2001bethe}.
 
-%Unlike the variational evidence resulting from, for example, a mean
-%field approximation, the Bethe energy is not guaranteed in general to
-%yield a bound on the true marginal likelihood. 
-
 \subsection{Predictive equivalence to the BCM}
 \label{sec:approx-predict}
-
+\vspace{-.2cm}
 Thus far we have focused on $q_{GPRF}$ primarily as a surrogate model
 for the training set $(X, \v{y})$.  However, it is natural to extend
 the GPRF to make predictions at a set of test points $X^*$, by including the
-function values $\v{f}^* = f(X^*)$ as an $M+1$st block, linked by
-pairwise potentials to each of the training blocks. The resulting
+function values $\v{f}^* = f(X^*)$ as an $M+1$st block, with an edge to each of the training blocks. The resulting
 predictive distribution,
 \begin{align}
-p_{GPRF}(\v{f}^* | \v{y}) &\propto q_{GPRF}(\v{f}^*, \v{y}) \\
+p_{GPRF}(\v{f}^* | \v{y}) \propto q_{GPRF}(\v{f}^*, \v{y}) 
 &= p(\v{f}^*) \prod_{i=1}^M \frac{p(\v{y}_i,
   \v{f}^*)}{p(\v{y}_i) p(\v{f}^*)} \left(\prod_{i=1}^M p(\v{y}_i) \prod_{(i,j)\in E} \frac{p(\v{y}_i, \v{y}_j)}{p(\v{y}_i)
-    p(\v{y}_j)}\right)  \\
-&\propto p(\v{f}^*) \prod_{i=1}^M \frac{p(\v{y}_i,
-  \v{f}^*)}{p(\v{y}_i) p(\v{f}^*)}\\
+    p(\v{y}_j)}\right)  \nonumber \\
+%&\propto p(\v{f}^*) \prod_{i=1}^M \frac{p(\v{y}_i,
+ % \v{f}^*)}{p(\v{y}_i) p(\v{f}^*)} \nonumber\\
 &=p(\v{f}^*)^{1-M} \prod_{i=1}^M p(\v{f}^* | \v{y}_i),
 \end{align}
 turns out to correspond exactly to the prediction of 
@@ -553,208 +513,269 @@ interpretation of the BCM.\footnote{The GPRF is still transductive, in
   can be seen explicitly in the precision matrix (\ref{eqn:approx-precision}). The
   advantage of the GPRF is that it provides a reasonable model for
   the training-set likelihood even in the absence of test
-  points. }
-
-A similar derivation shows that the conditional distribution of any
+  points. } A similar derivation shows that the conditional distribution of any
 block $\v{y}_i$ given all other blocks $\v{y}_{j\ne i}$ also takes the
-form of a BCM prediction, suggesting a natural Gibbs sampling
-algorithm. Intuitively, we could think of the GPRF as an approximate
-model in which the blocks are predicting each other using the BCM
-approximation instead of the full Gaussian conditionals. 
-
-%Pursuing this interpretation further suggests an alternative to marginal likelihood training, namely optimizing the
-%{\em pseudolikelihood} \cite{besag1975statistical} 
-%\begin{equation}
-%\log q_{pseudo} (\v{y}; X, \theta)= \sum_{i=1}^M \left (\log p(\v{y}_i)^{1-M} + \sum_{j\in
-% E_i} \log p(\v{y}_i | \v{y}_j) \right), 
-%\end{equation}
-%a discriminative objective in which each block is predicted by all the
-%others, corresponding to leave-one-out
-%cross-validation \cite{rasmussen2006}. We do not evaluate
-%pseudolikelihood training in this paper, but consider it an
-%interesting subject for future work. 
-
-% STOCHASTIC GRADIENT: mention here??
-% is it possible that the basic formulation *also* allows stochastic
-% gradient? it's basically a sum over pairs, plus the unary terms. We
-% could squash the unary terms into the pairs, so that stochastic
-% steps are "choose a random pair, tweak those two blocks, repeat as
-% desired"
-
+form of a BCM prediction, suggesting the possibility of
+{\em pseudolikelihood} training \cite{besag1975statistical}, i.e.,
+directly optimizing the quality of BCM predictions on held-out blocks
+(not explored in this paper).
+\vspace{-.2cm}
 \section{Experiments}
-
-We evaluated the GPRF model for latent variable modeling\footnote{We also considered
-  hyperparameter learning tasks, but found that local GPs are a very effective
-  baseline that was difficult to beat on standard
-  regression datasets, e.g., SARCOS.} using
-synthetic and real-world data. Out motivating application comes from seismology: seismic waveforms can be viewed as
-high-dimensional observations generated from an underlying
-three-dimension manifold, namely the Earth's crust. Seismic events
-occurring in nearby locations tend to register at a given detector as highly correlated
-waveforms (Figure~\ref{fig:wavematch}); using this fact it ought to be
-possible to improve location estimates. In this setting we have significant prior
-information regarding the event locations: we can use the
-location hypotheses from a traditional travel-time-based location system
-\cite{ISCcitation2015}, which grounds out into a
-Gaussian uncertainty ellipse for each event. 
-
-\subsection{Synthetic data (Lines)}
-\begin{figure}
-\centering
-\begin{subfigure}[t]{.22\textwidth}
-                \includegraphics[width=\textwidth]{lines_truth}
-                \caption{ Ground truth locations; color shows first of
-                  50 output dimensions. The generative lengthscale is 1/20 the width of the
-  image. }
-                \label{fig:linestrue}
-        \end{subfigure}\hspace{0.5em}
-\begin{subfigure}[t]{.22\textwidth}
-                \includegraphics[width=\textwidth]{lines_init}
-                \caption{Noisy observed locations, color shows
-                  inference partition. (MAD=0.027)}
-                \label{fig:linesinit}
-        \end{subfigure}\hspace{0.5em}
-\begin{subfigure}[t]{.22\textwidth}
-                \includegraphics[width=\textwidth]{lines_local}
-                \caption{Locations recovered by a local GP (L-200, MAD=0.0085). }
-                \label{fig:lineslocal}
-        \end{subfigure}\hspace{0.5em}
-\begin{subfigure}[t]{.22\textwidth}
-                \includegraphics[width=\textwidth]{lines_gprf}
-                \caption{ Locations recovered by a GP random field
-                  (RF-200, MAD=0.0037).}
-                \label{fig:linesgprf}
-        \end{subfigure}
-\caption{Synthetic line data consisting of 10000 points with noisily
-  observed locations, each represented by a
-  50-dimensional output ``waveform''. }
-\label{fig:lines}
-\end{figure}
+\vspace{-.2cm}
+\subsection{Uniform Input Distribution}
+\vspace{-.2cm}
+We first consider a 2D synthetic dataset intended to simulate spatial location tasks such as WiFi-SLAM
+\cite{ferris2007wifi} or seismic event location (below), in which we
+observe high-dimensional measurements but have only noisy information
+regarding the locations at which those measurements were
+taken. We sample $n$ points uniformly from the square of side length
+$\sqrt{n}$ to generate the true inputs $X$, them sample 50-dimensional output $Y$ from independent GPs
+with SE kernel $k(r) = \exp(-(r/\ell)^2)$ for $\ell=6.0$ and noise standard deviation
+$\sigma_n = 0.1$. The {\em observed} points
+$X^\text{obs} \sim N(X, \sigma^2_\text{obs}I)$ arise by corrupting $X$ with
+isotropic Gaussian noise of standard deviation
+$\sigma_\text{obs}=2$. The parameters $\ell$, $\sigma_n$, and
+$\sigma_\text{obs}$ were chosen to generate problems with
+interesting short-lengthscale structure for which
+GP-LVM optimization could nontrivially improve the initial noisy locations. Figure \ref{fig:synthX} shows a typical sample from this model.
 
 \begin{figure}
-    \centering
-    \begin{minipage}{.45\textwidth}
+ \centering
+ \begin{subfigure}[t]{.22\textwidth}
+         \includegraphics[width=\textwidth]{synth_init_X}
+         \caption{Noisy observed locations: mean error 2.48.}
+         \label{fig:synthX}
+     \end{subfigure}\hspace{0.5em}  
+\begin{subfigure}[t]{.21\textwidth}
+        \includegraphics[width=\textwidth]{synth_fullgp}
+        \caption{Full GP: 0.21.}
+        \label{fig:synth_exact} 
+    \end{subfigure}\hspace{0.5em}
+\begin{subfigure}[t]{.22\textwidth}
+        \includegraphics[width=\textwidth]{synth_grid_edges}
+        \caption{GPRF-100: 0.36. (showing grid cells)}
+        \label{fig:synth_gprf} 
+    \end{subfigure}\hspace{0.5em}
+\begin{subfigure}[t]{.21\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{crazylines_half}
-        \caption{Mean average deviations for local GPs (L) and GPRF (RF) with
-          block sizes $m=200$ and $m=1000$, and for the full GP. The off-scale
-          values for L-200 are approximately 0.08.}
-        \label{fig:linesresults}
-    \end{minipage}%
-   \qquad
-    \begin{minipage}{0.45\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{xcorr}
-        \caption{Amplitude-normalized waveforms for two distinct seismic events
-          occurring in the same region. Their reported locations
-          are 29.5km apart; the true locations are likely much closer. \cite{ISCcitation2015} }
-        \label{fig:wavematch}
-    \end{minipage}
-\end{figure}
-
-To investigate the GPRF model, we created a family of 2D synthetic
-datasets consisting of overlapping random lines of constant length,
-intended to evoke a seismic fault structure. 
-To generate a dataset of $n$ observations, we first sample $n/250$
-random  lines in a square of width $\sqrt{n/1000}$, and for each line 
-we sample $250$ points from a Gaussian tube with standard deviation 0.008. 
-These are the ``ground truth''
-event locations $X$; we generate ``waveforms'' $Y$ for these events by sampling
-from a GP with 50 independent output dimensions, using a SE kernel
-with lengthscale $0.15$ (Figure~\ref{fig:linestrue}). We then perturb the
-true locations with isotropic Gaussian noise to generate a set of noisy
-locations, $\hat{X} \sim \N(X, 0.2\cdot \mathcal{I})$. These noisy locations and
-their generating distribution are treated as a prior on $X$ during
-inference; we also use $\hat{X}$ as the initialization  (Figure~\ref{fig:linesinit}). 
-
-We attempted to recover the true event locations using the full GP-LVM
-model, local GPs (GP-LVM with block-diagonal covariance imposed) and
-the GPRF, using blocks of size 200 and 1000. Partitions were chosen randomly
-using the RPC method suggested by \cite{chalupka2012}, applied to the
-noisy locations $\hat{X}$. We ran L-BFGS on each objective for two
-hours or until convergence, whichever was sooner. As shown in
-Figure~\ref{fig:linesresults}, the local GP models sometimes failed
-entirely to converge to a reasonable solution, getting stuck in
-faraway local minima. The GPRF models performed well, essentially
-matching the full GP-LVM, and beating it at $n=5000$ when the two-hour
-runtime limit started to become a constraint. For larger $n$, the
-RF-1000 model also started to run out of time, yielding poor
-performance, but RF-200 continued to outperform the local GPs. 
-
-\begin{figure}
-\centering
-\begin{subfigure}[t]{.45\textwidth}
- \includegraphics[width=\textwidth]{seismic_loc}
-\caption{Mean deviations (in km) from GP-LVM locations on real seismic
-  events (lower is better).}
-\label{fig:seismicloc}
+        \includegraphics[width=\textwidth]{gprf_bad500}
+        \caption{FITC-500: 4.86. (showing inducing points)}
+        \label{fig:synth_fitc500} 
 \end{subfigure}
-\qquad
-\begin{subfigure}[t]{.45\textwidth}
- \includegraphics[width=\textwidth]{seismic_lik}
-\caption{Full GP-LVM marginal likelihood (normalized by $nD$) at the
-  recovered locations (higher is better).}
-\label{fig:seismiclik}
- \end{subfigure}
+\caption{Inferred locations on synthetic data
+  ($n=10000$), colored by the first output dimension $\v{y}_1$. }
+\label{fig:synth_data}
+\vspace{-.3cm}
 \end{figure}
-\vspace{-1em}
-\subsection{Seismic data}
-\vspace{-.5em}
-We also evaluated on a real seismic dataset, consisting of 13,000 waveforms aligned with 
-P wave arrivals at the Mankachi array (MKAR) in Kazakhstan
-between  April 1, 2008 and
-April 1, 2009. Each waveform is 10s long and sampled at 20Hz
-($D=200$). Location prior information comes from the ISC event
-bulletin \cite{ISCcitation2015}, which we use as initialization. 
-Unlike in the synthetic case, there is no ground truth, so we compare 
-the approximate algorithms against
-GP-LVM. We subsample the dataset by picking a central
-point and selecting the $n$ closest events, yielding smaller datasets
-on which it is possible to run GP-LVM. Figure~\ref{fig:seismicloc}
-shows the mean deviation, in kilometers, of the approximate locations from
-the locations recovered by GP-LVM MAP inference. The approximate
-models run for at most one hour, except on the full dataset ($n=2000$)
-where they were run for two hours. Here the RF-800 model is very close
-to exact inference, while the local GPs introduce significant
-error. It is not feasible to run GP-LVM inference on the full dataset of 13000 events, but we can perform a single (very slow) computation
-of the GP-LVM marginal likelihood on the final event hypothesis output
-by each method, giving some measure of the quality of each method as a
-surrogate (Figure~\ref{fig:seismiclik}). Although all methods struggled
-with convergence at larger scales\footnote{Note to reviewers: a final
-  version of this paper will evaluate these methods using longer
-  runtimes, where we expect the fully-converged GPRF to maintain its
-  dominance.}, on the full dataset the RF-200 model continued to outperform the local GPs,
-operating in a regime where it would be impossible to run a full GP. 
 
+% \begin{subfigure}[t]{.32\textwidth}
+%                  \includegraphics[width=\textwidth]{fitc_scaling}
+%                  \caption{ Solution quality at convergence as a
+%                    function of $n$, for fixed (true) lengthscale.}
+%                  \label{fig:fitc_scale}
+%          \end{subfigure}\hspace{0.5em}
+
+For local GPs and GPRFs, we take the spatial partition to be a
+grid with $n/m$ cells, where $m$ is the desired number of points per
+cell.  The GPRF edge set $E$ connects each cell to its 
+eight neighbors (Figure
+\ref{fig:synth_gprf}), yielding linear time
+complexity $O(nm^2)$. During optimization, a practical choice
+is necessary: do we use a fixed partition of the points, or re-assign
+points to cells as they cross spatial boundaries? The latter
+corresponds to a coherent (block-diagonal) spatial covariance function, but introduces
+discontinuities to the marginal likelihood. In our experiments the GPRF was not sensitive to
+this choice, but local GPs performed more reliably with fixed
+spatial boundaries (in spite of the discontinuities), so we used this
+approach for all experiments.
+\begin{figure}
+\begin{subfigure}[t]{.32\textwidth}
+                 \includegraphics[width=\textwidth]{truegp_bytime}
+                 \caption{Mean location error over time for $n=10000$,
+                   including comparison to full GP.}
+                 \label{fig:truegp}
+\end{subfigure}\hspace{0.5em}
+\begin{subfigure}[t]{.32\textwidth}
+                 \includegraphics[width=\textwidth]{fitc_scaling_lscale}
+                 \caption{Mean error at convergence as a
+                   function of $n$, with learned
+                   lengthscale.}
+                 \label{fig:fitc_lscale}
+         \end{subfigure}\hspace{0.5em}
+ \begin{subfigure}[t]{.32\textwidth}
+                 \includegraphics[width=\textwidth]{eighty_bytime}
+                 \caption{Mean location error over time for $n=80000$.}
+                 \label{fig:eighty}
+         \end{subfigure}
+\caption{Results on synthetic data.}
+\label{fig:synthresults}
+\vspace{-0.5cm}
+\end{figure} 
+
+For comparison, we also evaluate the Sparse GP-LVM, implemented in GPy
+\cite{gpy2014}, which uses the FITC approximation to the
+marginal likelihood \cite{lawrence2007learning}. Here the
+approximation parameter $m$ is the number of inducing points. 
+
+We ran L-BFGS optimization to recover MAP
+locations (or a local optima thereof). Figure \ref{fig:truegp} shows
+mean location error (Euclidean distance) for $n=10000$ points; at this
+size it is tractable to compare directly to the full GP-LVM. The GPRF
+with a large block size ($m$=1111, corresponding to a 3x3 grid) nearly matches the solution
+quality of the full GP while requiring less time, while the local
+methods are quite fast to converge but become stuck at inferior
+optima. The FITC optimization exhibits an interesting pathology: it
+initially moves towards a good solution but then diverges towards what
+turns out to correspond to
+a contraction of the space (Figure \ref{fig:synth_fitc500}); we
+conjecture this is because there are not enough inducing points to
+faithfully represent the full GP distribution over the entire space. A
+partial fix is to allow FITC to jointly optimize over locations and
+the correlation lengthscale $\ell$; this yielded a biased lengthscale
+estimate $\hat{\ell} \approx 7.6$ but more accurate
+locations (FITC-500-$\ell$ in Figure \ref{fig:truegp}).
+
+To evaluate scaling behavior, we next considered problems of
+increasing size up to $n=80000.$\footnote{The astute reader will wonder how we generated
+  synthetic data on problems that are clearly too large for an exact
+  GP. For these synthetic problems as well as the seismic example below, the
+  covariance matrix is relatively sparse, with only 2\% of entries
+  corresponding to points within six kernel lengthscales of each other. By considering only these
+  entries, we were able to draw samples using a sparse Cholesky
+  factorization, although this required approximately 30GB of RAM. Unfortunately, this approach does not straightforwardly
+  extend to GP-LVM inference under the exact GP, as the standard
+  expression for the marginal likelihood
+  derivatives \[\frac{\partial}{\partial \v{x}_{i}} \log p(\v{y})
+  = \frac{1}{2} \tr\left( \left((K_y^{-1} \v{y}) (K_y^{-1} \v{y})^T -
+      K_y^{-1}\right) \frac{\partial K_y}{\partial \v{x}_{i}} \right)\] involves the full
+  precision matrix $K_y^{-1}$ which is not sparse in general. Bypassing this expression via 
+  automatic differentiation through the sparse Cholesky
+  decomposition could perhaps allow exact GP-LVM inference to scale to
+  somewhat larger problems.} Out of generosity to FITC we allowed each method to learn
+its own preferred lengthscale. Figure \ref{fig:fitc_lscale}
+reports the solution quality at convergence, showing that even with an
+adaptive lengthscale, FITC requires increasingly many inducing points
+to compete in large spatial domains. This is intractable for larger
+problems due to $O(m^3)$ scaling; indeed, attempts to run at $n>55000$
+with 2000 inducing points exceeded 32GB of available memory. Recently,
+more sophisticated inducing point methods have claimed scalability to very large
+datasets \cite{hensman2013gaussian, gal2014distributed}, but they do
+so with $m\le 1000$; we expect that
+they would hit the same fundamental scaling constraints for problems
+that inherently require many inducing points. 
+
+On our largest synthetic problem, $n=80000$, inducing point
+approximations are intractable, as is the full GP-LVM. Local GPs converge more quickly
+than GPRFs of equal block size, but the GPRFs find higher-quality
+solutions (Figure \ref{fig:eighty}). After a short initial period, the
+best performance always belongs to a GPRF, and at the conclusion of 24 hours the best GPRF
+solution achieves mean error 42\% lower than the best local
+solution (0.18 vs 0.31).
+\vspace{-0.2cm}
+\subsection{Seismic event location}
+\vspace{-0.2cm}
+ \begin{figure}
+ \centering
+  \begin{subfigure}[t]{.50\textwidth}
+                  \includegraphics[width=\textwidth]{seismic_X}
+                  \caption{Seismic event locations.}
+                  \label{fig:seismicX}
+          \end{subfigure}\hspace{0.5em}
+  \begin{subfigure}[t]{.40\textwidth}
+                  \includegraphics[width=\textwidth]{seismic_xcov_small}
+                  \caption{Mean error over time.}
+                  \label{fig:seismicresults}
+          \end{subfigure}
+ \caption{Seismic event location task.}
+ \label{fig:seismic}
+\vspace{-0.7cm}
+ \end{figure}
+
+We next consider an application to seismic event location, which formed the
+motivation for this work. Seismic waves can be
+viewed as high-dimensional vectors generated from an
+underlying three-dimension manifold, namely the Earth's
+crust. Nearby events tend to generate similar waveforms; we
+can model this spatial correlation as a Gaussian process. Here we have significant prior information regarding the event
+locations available from traditional travel-time-based location systems
+\cite{ISCcitation2015} which produce an independent Gaussian uncertainty ellipse for each event.
+
+A full probability model of seismic waveforms, accounting for background
+noise and performing joint alignment of arrival times, is beyond the scope of this
+paper. To focus specifically on the ability to approximate GP-LVM inference, we
+used real event locations but generated synthetic waveforms  by sampling from a 50-output GP using a Mat\'ern kernel
+\cite{rasmussen2006} with $\nu=3/2$ and a lengthscale of 40km. We also
+generated observed location estimates $X^\text{obs}$, by corrupting the
+true locations with Gaussian noise of standard deviation
+20km in each dimension. Given the
+observed waveforms and noisy locations, we are interested in recovering the
+latitude, longitude, and depth of each event.
+
+Our dataset consists of 107556 events detected at the Mankachi array
+station in Kazakstan between 2004 and 2012. Figure~\ref{fig:seismicX}
+shows the event locations, colored to reflect a principle axis tree
+\cite{mcnames2001fast} partition into blocks of $400$ points (tree construction time was
+negligible). The GPRF edge set contains all pairs of
+blocks for which any two points had initial locations within one
+kernel lengthscale (40km) of each other. We also evaluated
+longer-distance connections, but found that this relatively local
+edge set had the best performance/time tradeoffs: eliminating edges not
+only speeds up each optimization step, but in some cases actually
+yielded faster per-step convergence (perhaps because denser edge sets
+tended to create large cliques for which the pairwise GPRF objective is
+a poor approximation).
+
+Figure \ref{fig:seismicresults} shows the quality of recovered locations as a
+function of computation time; we jointly optimized over event locations as
+well as two lengthscale parameters (surface distance
+and depth) and the noise variance $\sigma^2_n$. Local GPs 
+perform quite well on this task, but the best
+GPRF achieves 7\% lower error than the best local
+GP model (12.8km vs 13.7km, respectively) given equal time. An even
+better result can be obtained by using the results of a local GP
+optimization to initialize a GPRF. Using the same
+partition ($m=800$) for both local GPs and the GPRF, this ``hybrid'' method
+gives the lowest final error (12.2km), and is dominant across a wide
+range of wall clock times, suggesting it as a promising
+practical approach for large GP-LVM optimizations. 
+\vspace{-0.3cm}
 \section{Conclusions and Future Work}
-\vspace{-.5em}
+\vspace{-0.4cm}
 The Gaussian process random field is a tractable and effective
-surrogate for the GP marginal likelihood, evading a large intractable
-computation by partitioning the data into smaller blocks. It has the flavor of
+surrogate for the GP marginal likelihood. It has the flavor of
 approximate inference methods such as loopy belief propagation, but
-can be analyzed precisely in terms of a determinstic approximation to
-the inverse covariance, and additionally provides a new training-time
-interpretation to the Bayesian Committee Machine. It is easy to
-implement and its evaluation can be straightforwardly parallelized. 
+can be analyzed precisely in terms of a deterministic approximation to
+the inverse covariance, and provides a new training-time
+interpretation of the Bayesian Committee Machine. It is easy to
+implement and can be straightforwardly parallelized. 
 
-An issue left mostly undiscussed in this paper is the selection of the
-partition itself. Most published work uses simple clustering
-heuristics such as $k$-means \cite{tresp2000bayesian} or RPC
-\cite{chalupka2012} on the $X$ values, but this is unsatisfying in the
-latent variable setting where those values may be
-unobserved. \cite{rasmussen2006} suggests that considering $\v{y}$ in
-the partition may be helpful even for regression applications, but we
-are unaware of any published work on doing so. 
+One direction for future work involves finding partitions for
+which a GPRF performs well, e.g., partitions that induce a block near-tree
+structure. A perhaps related question is identifying when the GPRF
+objective defines a normalizable probability
+distribution (beyond the case of an exact tree structure) and under
+what circumstances it is a good approximation to the exact GP likelihood.
 
-Another useful avenue for future work would be the integration of the
-GPRF framework with inducing point methods, similarly to the
-integration of inducing points with local GPs accomplised by PIC \cite{snelson2007}.
-
-%\section{Acknowledgements}
-% DTRA grant. MSR grant. 
-%
-
+This evaluation in this paper focuses on spatial data; however, both local
+GPs and the BCM have been successfully applied to high-dimensional
+regression problems \cite{chalupka2012, deisenroth2015distributed}, so
+exploring the effectiveness of the GPRF for dimensionality reduction
+tasks would also be interesting. Another useful avenue is to integrate the
+GPRF framework with other approximations: since the GPRF and inducing
+point methods have complementary strengths -- the GPRF is useful for
+modeling a function over a large space, while inducing points are useful
+when the density of available data in some region of the space
+exceeds what is necessary to represent the function -- an integrated
+method might enable new applications for which neither approach alone
+would be sufficient. 
+\vspace{-0.4cm}
+\subsubsection*{Acknowledgements}
+\vspace{-0.2cm}
+We thank the anonymous reviewers for their helpful 
+suggestions.  This work was supported by DTRA grant \#HDTRA-11110026,
+and by computing resources donated by Microsoft Research under an Azure for Research grant.
+ 
 \bibliographystyle{unsrt}
-\bibliography{refs}
+{\small \bibliography{refs}}
 
 \end{document}
