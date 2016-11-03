@@ -172,7 +172,7 @@ well as signflip symmetries on each column.
 
 Recent analysis by \citet{nakajima2013global} has obtained an analytic
 solution to the mean-field variational objective in this model. They show
-that latent traits obtained through VB and even MAP inference shrink each singular value by
+that latent traits obtained through variational and even MAP inference shrink each singular value by
 a factor that depends on the observation noise $\sigma^2_n$, so that
 all singular values below some threshold are zeroed out: the
 model effectively uses fewer traits than it was allotted.  This
@@ -243,9 +243,9 @@ origin, while the symmetrized $\tilde{q}$ captures both true modes.}
 \centering
 \includegraphics[width=0.5\textwidth]{signflip_sv_plot}
 \caption{Predictive mean $\E[uv | r]$ in the scalar factorization model $r = uv + \epsilon$, with $u,
-  v, \epsilon \sim \N(0, 1)$. Standard mean field (MFVB)
+  v, \epsilon \sim \N(0, 1)$. Standard mean field (MFVI)
   and even MAP are subject to degenerate solutions at zero for small $r$, while
-  inference with a symmetrized posterior (SVB) invariant to signflips
+  inference with a symmetrized posterior invariant to signflips (SymVI)
   more closely recovers the Bayes predictive mean.}
 \label{fig:signflip_svs}
 \end{figure}
@@ -330,7 +330,7 @@ factorization where all quantities are scalar
 numerically compute the Bayes predictive mean. \Cref{fig:signflip_svs}
 compares predictive means as a function of the observed scalar value $r$, showing
 that while standard methods exhibit degenerate regularization,
-predictions under the symmetrized VB posterior track the true Bayes
+predictions using the symmetrized posterior track the true Bayes
 prediction much more closely. 
 
 % TODO in full version mention combinatorial signflip symmetry, permutation symmetry 
@@ -351,7 +351,7 @@ prediction much more closely.
 \label{fig:rot_error}
 \end{subfigure}
 \caption{Inference on 80 synthetic samples with $n=m=40$, $k=20$, and $\sigma_n
-  = 2$. Orthogonally symmetrized VB (SVB) uses the full capacity of
+  = 2$. Orthogonally symmetrized VI (SymVI) uses the full capacity of
   latent traits, resulting in better predictions.}
 \end{figure}
 
@@ -372,14 +372,14 @@ the mixture entropy $\mathcal{H}(\tilde{q})$ relative to the base
 $\mathcal{H}(q)$. Inference using the mixture entropy $\mathcal{H}(\tilde{q})$
 therefore penalizes the nullspace dimension of the posterior mean, avoiding component collapse by encouraging nonzero singular values. This effect is seen in \Cref{fig:rot_svs}, which plots
 singular values of the predictive mean $\E[\v{U}\v{V}^T | \v{R}]$ from a relatively noisy
-($\sigma_n=2$) synthetic 20-trait model. While the mean field (MFVB) and MAP
-solutions (and MFVB with isotropic covariance, included
-for comparison) shrink many traits to zero, symmetrized VB (SVB) uses
+($\sigma_n=2$) synthetic 20-trait model. While the mean field VI and MAP
+solutions (and MFVI with isotropic covariance, included
+for comparison) shrink many traits to zero, symmetrized VI uses
 the model's full capacity. \Cref{fig:rot_error} shows that this is
-reflected in predictive performance: symmetrized VB yields better
+reflected in predictive performance: symmetrized VI yields better
 reconstructions of the true
 generative ratings $\v{U}\v{V}^T$ than the implicitly-regularized MAP
-and (especially) MFVB estimates. 
+and (especially) mean field estimates. 
 
 \section{Future work}
 \vspace{-0.5em}
