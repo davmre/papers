@@ -202,16 +202,18 @@ general framework, which we then specialize to model the orthogonal symmetries t
 \end{subfigure}
 \begin{subfigure}[t]{.3\textwidth}
 \includegraphics[width=\textwidth]{signflip_mfvb_posterior}
-\caption{Mean-field Gaussian approximation.}
+\caption{Mean-field Gaussian approximation fits a degenerate mode at the
+  origin.}
 \end{subfigure}
 \begin{subfigure}[t]{.3\textwidth}
 \includegraphics[width=\textwidth]{signflip_symmetric_posterior}
 \caption{Symmetrized approximation $\tilde{q}$ mixing $q^*(u,v)$ (dotted) and $q^*(-u,-v)$.}
 \end{subfigure}
-\caption{Implicit regularization in the scalar factorization model $r = uv +
+\caption{Posteriors from the scalar factorization model $r = uv +
   \epsilon$; $u,v \in \mathbb{R}$, given observed
-  $r=1.5$. The mean field approximation finds a degenerate mode at the
-origin, while the symmetrized $\tilde{q}$ captures both true modes.}
+  $r=1.5$. Implicit regularization results from the mean-field
+  posterior attempting to cover both modes, ending up at the
+  origin. The symmetrized posterior explicitly corrects this effect.}
 \label{fig:signflip_demo}
 \end{figure}
 
@@ -219,22 +221,24 @@ origin, while the symmetrized $\tilde{q}$ captures both true modes.}
 \centering
 \begin{subfigure}[t]{.3\textwidth}
 \includegraphics[width=\textwidth]{rot_bayes_posterior}
-\caption{True posterior $p(\v{u} | r)$ has rotational symmetry.}
+\caption{True posterior $p(\v{u} | r)$ yielding
+  predictive mean $\E[\v{u}\v{v}^T|\v{r}] = 1.30$.}
 \end{subfigure}
 \begin{subfigure}[t]{.3\textwidth}
 \includegraphics[width=\textwidth]{rot_mfvb_posterior}
-\caption{Mean-field Gaussian approximation is pulled towards the origin.}
+\caption{Mean-field approximation is pulled towards the
+  origin, $\E[\v{u}\v{v}^T|\v{r}] = 0.44$.}
 \end{subfigure}
 \begin{subfigure}[t]{.3\textwidth}
 \includegraphics[width=\textwidth]{rot_symmetric_posterior}
-\caption{Symmetrized approximation $\tilde{q}$ formed by rotation
-  of base Gaussian $q^*$ (dotted).}
+\caption{Symmetrized approximation $\tilde{q}$ rotating
+  Gaussian $q^*$ (dotted),  $\E[\v{u}\v{v}^T|\v{r}] = 1.38$.}
 \end{subfigure}
-\caption{Implicit regularization of the marginal posterior $p(\v{u} | r)$ in the
+\caption{Marginal posteriors $p(\v{u} | r)$ from the
   overparameterized scalar model $r = \v{u}\v{v}^T + \epsilon$;
   $\v{u},\v{v} \in \mathbb{R}^{1 \times 2}$, given observed
   $r=2$. This rotational symmetry is a special case of the more general
-  symmetry in the joint column space of $\v{U}$ and $\v{V}$.}
+  matrix factorization symmetry in the joint column space of $\v{U}$ and $\v{V}$.}
 \label{fig:rot_demo}
 \vspace{-1.3em}
 \end{figure}
@@ -278,8 +282,8 @@ We define a {\em symmetrized
   posterior} $\tilde{q}_{\theta}$ by a two-step sampling
 process: first sample $\v{z}^*$ from some base posterior $q_\theta^*$, then apply a random
 transformation $\v{T}$ to generate $\v{z} =
-\v{T}\v{z}^*$. Equivalently we can write $\tilde{q}_{\theta}$ as an
-explicit mixture with respect to the uniform (Haar) measure on $\G$,
+\v{T}\v{z}^*$. Formally we write the density of $\tilde{q}_{\theta}$ as an
+explicit mixture with respect to the uniform (Haar) measure $V(\v{T})$,
 given by
 \begin{align}
 \tilde{q}_{\theta}(\v{z}) &= \int_{\v{T}\in \G}
@@ -322,7 +326,7 @@ compute or bound the mixture entropy $\mathcal{H}(\tilde{q}_\theta) =
 reduces to computing the log density $-\log \tilde{q}_\theta(\v{z}^*)$
 at values $\v{z}^*$ sampled from the base posterior. In the simple case of signflip
 symmetries, this can be done tractably with an explicit sum $\log
-\tilde{q}(\v{z}) = \log \frac{1}{2}\left(q(\v{z}) + q(-\v{z})\right)$.
+\tilde{q}_\theta(\v{z}) = \log \frac{1}{2}\left(q_\theta^*(\v{z}) + q_\theta^*(-\v{z})\right)$.
 
 Signflip symmetries arise in the special case of matrix
 factorization where all quantities are scalar
@@ -350,9 +354,10 @@ prediction much more closely.
   \|_1$.}
 \label{fig:rot_error}
 \end{subfigure}
-\caption{Inference on 80 synthetic samples with $n=m=40$, $k=20$, and $\sigma_n
-  = 2$. Orthogonally symmetrized VI (SymVI) uses the full capacity of
-  latent traits, resulting in better predictions.}
+\caption{Inference on 80 synthetic matrices sampled with $n=m=40$, $k=20$, and $\sigma_n
+  = 2$. Orthogonally symmetrized VI produces full-rank
+  posteriors (left) that yield more accurate predictions than MFVI or
+  MAP (right).}
 \end{figure}
 
 \vspace{-0.5em}
@@ -360,10 +365,10 @@ Our main technical contribution is an efficient approximation to the continuous 
 \begin{align*}
 \log \tilde{q}(\v{X}) &= \log \int_{\v{T}\in \O(k)} \N(\v{X}; \v{M}\v{T}, \v{T}^T\v{\Sigma} \v{T}) dV(\v{T})
 \end{align*}
-in which an elementwise matrix Gaussian $q(\v{X})=\N(\v{X}; \v{M}, \v{\Sigma})$ is
-integrated over the orthogonal group $\O(k)$. For space considerations
-we defer details to \Cref{sec:rot_density}. Our current analysis assumes an isotropic covariance ($\v{\Sigma}=c\I$)
-which we hope to relax in future work. 
+in which the columns of an elementwise matrix Gaussian $q^*(\v{X})=\N(\v{X}; \v{M}, \v{\Sigma})$ are
+mixed over the orthogonal group $\O(k)$ (\Cref{fig:rot_demo}). For space considerations
+we defer details to \Cref{sec:rot_density}. Our current analysis
+assumes an isotropic covariance ($\v{\Sigma}=c\I$) which we hope to relax in future work. 
 
 Informally, any rotation $\v{T}$ acting within the nullspace of $\v{M}$
 generates a mixture component $\v{M}\v{T}=\v{M}$ equivalent to the base distribution;
@@ -420,15 +425,15 @@ We consider the symmetrized approximate posterior
 \end{align*}
 which is a continuous mixture of Gaussians with means and (co)variances
 corresponding to rotations within the column space of $\v{M}$. The log
-density decomposes into that of the base density $q$, plus a correction term $r(\v{X}, \v{M}, \v{\Sigma})$:
+density decomposes into that of the base density $q^*$, plus a correction term $r(\v{X}, \v{M}, \v{\Sigma})$:
 \begin{align}
 \log \tilde{q}(\v{X}) &= \log \int_{\v{T}\in \O(k)} \N(\v{X}\v{T}^T; \v{M}, \v{\Sigma}) dV(\v{T})\nonumber\\
 &=\log \N(\v{X}; \v{M}, \v{\Sigma}) + \log \int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M}, \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})\nonumber\\
 &=\log q^*(\v{X}) + r(\v{X}, \v{M}, \v{\Sigma})\label{eqn:symmetrized_orthog}
 \end{align}
 Intuitively the correction $r$ captures the rotational asymmetry of the
-base distribution $q$: if $q$ is already rotationally symmetric (e.g.,
-if $\v{M}=\v{0}$, so $q$ is centered at the origin)
+base distribution: if $q^*$ is already rotationally symmetric (e.g.,
+if $\v{M}=\v{0}$, so $q^*$ is centered at the origin)
 then the ratio inside the integral is unity and the correction is zero. Examining this correction more closely,
 \begin{align*}
 r(\v{X}, \v{M}, \v{\Sigma}) &= \log \int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M}, \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})\\
@@ -444,7 +449,7 @@ over the orthogonal group. The first factor, $f(\v{T}) = \exp\left\{-\frac{1}{2}
   \left( \Tr \left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{T}\v{X}^T\right] -
     \Tr\left[\v{X}\v{\Sigma}^{-1}\v{X}^T\right]\right)\right\},$
 measures the discrepancy between the precision matrix $\v{\Sigma}^{-1}$ and its
-transformed counterpart $\v{T}\v{\Sigma}^{-1}\v{T}^T$, while the second factor, $g(\v{T}) = \exp\left\{\Tr\left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{M}^T \right] -
+transformed counterpart $\v{T}^T\v{\Sigma}^{-1}\v{T}$, while the second factor, $g(\v{T}) = \exp\left\{\Tr\left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{M}^T \right] -
   \Tr\left[\v{X}\v{\Sigma}^{-1}\v{M}^T\right]\right\},$ measures the extent to which a
 given transformation $\v{T}$ aligns the observed value $\v{X}$ with the mean
 $\v{M}$. Note that $f$ vanishes in the case of isotropic covariance $\v{\Sigma} = c\I$, since this implies
