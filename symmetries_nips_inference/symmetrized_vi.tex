@@ -7,12 +7,13 @@
 % to avoid loading the natbib package, add option nonatbib:
 % \usepackage[nonatbib]{nips_2016}
 
-\usepackage{nips_2016}
+
 
 % to compile a camera-ready version, add the [final] option, e.g.:
-% \usepackage[final]{nips_2016}
+\usepackage[final]{nips_2016}
 
 \usepackage{color}
+\usepackage{xcolor}
 \usepackage[utf8]{inputenc} % allow utf-8 input
 \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
 \usepackage{hyperref}       % hyperlinks
@@ -259,12 +260,17 @@ $\v{z}$ are observed and latent variables, and perform
 inference by minimizing the exclusive divergence $KL[q \| p]$
 between an approximate posterior $q_{\v{\theta}}(\v{z})$ and the true
 posterior $p(\v{z}|\v{x})$. This is equivalent to maximizing a lower
-bound on the log model evidence,
-\begin{equation}
-\mathcal{L}(\v{\theta})\label{eqn:elbo} = \E_{\v{z}\sim q_\theta}\left[\log p(\v{x}, \v{z}) -
-                \log q_\theta(\v{z})\right] \le \log p(\v{x}) 
-\end{equation}
-known as the Evidence Lower Bound or \elbo \; \citep{bishop2006pattern}. 
+bound on the log model evidence, known as the Evidence Lower Bound or \elbo \; \citep{bishop2006pattern},
+\begin{align}
+\mathcal{L}(\v{\theta}) & =\E_{\v{z}\sim
+  q_\theta}\left[\log p(\v{x}, \v{z}) - \log q_\theta(\v{z})\right] \le \log p(\v{x}),\label{eqn:elbo_mc}
+\end{align}
+which can equivalently be written in terms of the entropy
+$\mathcal{H}(q_\theta)$ of the approximating posterior:
+\begin{align}
+\mathcal{L}(\v{\theta}) \label{eqn:elbo} &= \E_{\v{z}\sim
+  q_\theta}\left[\log p(\v{x}, \v{z})\right] + \mathcal{H}(q_\theta).
+\end{align}
 The so-called reparameterization trick enables practical inference via
 gradient-based stochastic optimization of $\mathcal{L}(\v{\theta})$, as
 long as the sampling process $\v{z}\sim q_\theta$ can be expressed as
@@ -306,27 +312,50 @@ over a base sample $\v{z}^*$ and transformation $\v{T}$:
 Since the model density $p$ is invariant to $\v{T}$ by assumption, and
 the symmetrized posterior $\tilde{q}_\theta$ is also
 invariant by construction, the expectation over $\v{T}$ is vacuous. Dropping it yields the
-final objective
+objective
 \begin{align}
-\mathcal{L}(\tilde{q}_\theta) &= \E_{\v{z}^*\sim q^*_\theta}\left[\log p(\v{x}, \v{z}^*) - \log \tilde{q}_\theta(\v{z}^*)\right]\label{eqn:symmetrized_elbo},
+\mathcal{L}(\tilde{q}_\theta) &= \E_{\v{z}^*\sim q^*_\theta}\left[\log p(\v{x}, \v{z}^*) -
+  \log \tilde{q}_\theta(\v{z}^*)\right],\label{eqn:symmetrized_elbo}
 \end{align}
-which differs from (\ref{eqn:elbo}) only in that we are now
+which differs from (\ref{eqn:elbo_mc}) only in that we are now
 evaluating the mixture density $\log \tilde{q}_\theta$ in place of the
-original $\log q_\theta$. In particular, the expectation is
-only under the base posterior, so reparameterization
-gradients present no special difficulty, and we are still free to
-exploit any analytic structure in the expected log density $\E_{\v{z}^*\sim q^*_\theta}\left[\log p(\v{x}, \v{z}^*)\right]$. 
+original $\log q_\theta$. By straightforward manipulation we obtain
+an equivalent form,
+\begin{align}
+\mathcal{L}(\tilde{q}_\theta) &= \E_{\v{z}^*\sim q^*_\theta}\left[\log
+                                p(\v{x}, \v{z}^*)\right] + \mathcal{H}(q^*_\theta)
+                                + KL[q^*_\theta \| \tilde{q}_\theta ],\label{eqn:symmetrized_elbo_kl}
+\end{align}
+which is equal to (\ref{eqn:elbo}) plus a nonnegative term
+$KL[q^*_\theta \| \tilde{q}_\theta ]$, so this bound is at least as
+tight as (\ref{eqn:elbo}). The KL term measures the additional
+information needed to code a sample from the symmetrized
+$\tilde{q}_\theta$ given a sample from $q^*_\theta$; in
+the case of well-separated discrete modes, this is simply the
+the (log) number of modes.\footnote{It is common to adjust na\"ive
+  evidence bounds by a symmetry-counting term, e.g.,
+  $\log 2^n$ for signflip symmetries or $\log n!$ for permutation
+  symmetries, but this is incorrect when the approximate posterior
+  straddles multiple modes. The KL term in
+  (\ref{eqn:symmetrized_elbo_kl}) can be seen as the generally correct
+  form of this adjustment, which always yields a valid evidence
+  bound.} Conversely, when modes are close together, a base posterior
+$q^*_\theta$ that straddles all modes will gain no
+additional entropy from symmetrization ($KL[q^*_\theta \|
+\tilde{q}_\theta ]=0$), so the KL term encourages the base pasterior
+to be ``asymmetric'' and choose a single one of the overlapping modes
+to fit.
 
 \subsection{Signflip symmetry}
 
 The framework described above is applicable generally to any base
 family $q^*_\theta$ and symmetry group $\G$; the challenge in practice is to efficiently
-compute or bound the mixture entropy $\mathcal{H}(\tilde{q}_\theta) =
-\E[-\log \tilde{q}_\theta(\v{z}^*)]$. Under a Monte Carlo approximation this
-reduces to computing the log density $-\log \tilde{q}_\theta(\v{z}^*)$
-at values $\v{z}^*$ sampled from the base posterior. In the simple case of signflip
-symmetries, this can be done tractably with an explicit sum $\log
-\tilde{q}_\theta(\v{z}) = \log \frac{1}{2}\left(q_\theta^*(\v{z}) + q_\theta^*(-\v{z})\right)$.
+compute or bound the symmetrized divergence $KL[q^*_\theta \| \tilde{q}_\theta ] =
+\E[\log q^*_\theta(\v{z}^*)-\log \tilde{q}_\theta(\v{z}^*)]$. Under a
+Monte Carlo approximation the challenge reduces to computing the log
+density $-\log \tilde{q}_\theta(\v{z}^*)$ at values $\v{z}^*$ sampled
+from the base posterior. In the simple case of signflip symmetries,
+this can be done tractably with an explicit sum $\log \tilde{q}_\theta(\v{z}) = \log \frac{1}{2}\left(q_\theta^*(\v{z}) + q_\theta^*(-\v{z})\right)$.
 
 Signflip symmetries arise in the special case of matrix
 factorization where all quantities are scalar
@@ -360,7 +389,6 @@ prediction much more closely.
   MAP (right).}
 \end{figure}
 
-\vspace{-0.5em}
 Our main technical contribution is an efficient approximation to the continuous mixture density
 \begin{align*}
 \log \tilde{q}(\v{X}) &= \log \int_{\v{T}\in \O(k)} \N(\v{X}; \v{M}\v{T}, \v{T}^T\v{\Sigma} \v{T}) dV(\v{T})
@@ -387,7 +415,7 @@ generative ratings $\v{U}\v{V}^T$ than the implicitly-regularized MAP
 and (especially) mean field estimates. 
 
 \section{Future work}
-\vspace{-0.5em}
+
 These preliminary results demonstrate that explicitly accounting for
 parameter symmetries can yield better inferences. In future work we
 hope to consider symmetrization of non-isotropic Gaussians and
@@ -399,8 +427,14 @@ automatic relevance determination (ARD) and model selection,
 as well as extensions to stochastic inference in ``deep'' models
 such as variational autoencoders.
 
+\section*{Acknowledgements}
+This work was inspired by (though not performed during) an internship
+with the Infer.NET team at Microsoft Research Cambridge, and in
+particular by many illuminating discussions with Tom Minka. The author is
+supported by the Defense Threat Research Agency (DTRA) under
+grant \#HDTRA-1111-0026.
+
 %evaluating predictive variance. 
-\newpage
 \bibliographystyle{apa}
 \bibliography{references}
 
@@ -415,7 +449,7 @@ matrix-valued variable $\v{X}$; in matrix
 factorization we will let $\v{X}= \left[\begin{array}{l}\v{U}\\\v{V}\end{array}\right] \in \mathbb{R}^{(n+m)\times k}$ be the stacked matrix of
 latent traits. We will focus on the restrictive case where each row is described by the
 same diagonal covariance $\v{\Sigma} \in \mathbb{R}^{k \times k}$, so that the density can be written
-\[q^*(\v{X}) \propto \exp\left\{-\frac{1}{2}\Tr\left[(\v{X}-\v{M})\v{\Sigma}^{-1}(\v{X}-\v{M})^T\right]\right\};\]
+\[q^*(\v{X}) = \N(\v{X}; \v{M},  \v{\Sigma}) \propto \exp\left\{-\frac{1}{2}\Tr\left[(\v{X}-\v{M})\v{\Sigma}^{-1}(\v{X}-\v{M})^T\right]\right\};\]
  below we will restrict this further to the case where $\v{\Sigma} = c\I$
  is isotropic. We hope to relax both of these assumptions in future work. 
 
@@ -424,45 +458,47 @@ We consider the symmetrized approximate posterior
 \tilde{q}(\v{X}) = \int_{\v{T}\in \O(k)} \N(\v{X}\v{T}^T; \v{M}, \v{\Sigma}) dV(\v{T}) = \int_{\v{T}\in \O(k)} \N(\v{X}; \v{M}\v{T}, \v{T}^T \v{\Sigma} \v{T}) dV(\v{T})
 \end{align*}
 which is a continuous mixture of Gaussians with means and (co)variances
-corresponding to rotations within the column space of $\v{M}$. The log
-density decomposes into that of the base density $q^*$, plus a correction term $r(\v{X}, \v{M}, \v{\Sigma})$:
+corresponding to rotations within the column space of $\v{M}$. For symmetrized inference we must compute the divergence
 \begin{align}
-\log \tilde{q}(\v{X}) &= \log \int_{\v{T}\in \O(k)} \N(\v{X}\v{T}^T; \v{M}, \v{\Sigma}) dV(\v{T})\nonumber\\
-&=\log \N(\v{X}; \v{M}, \v{\Sigma}) + \log \int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M}, \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})\nonumber\\
-&=\log q^*(\v{X}) + r(\v{X}, \v{M}, \v{\Sigma})\label{eqn:symmetrized_orthog}
+KL[q^*_\theta \| \tilde{q}_\theta] &= \E_{q^*}\left[\log
+                                     \frac{q^*_\theta(\v{X})}{\tilde{q}_\theta(\v{X})}\right]\nonumber\\
+&= \E_{q^*} \left[-\log  \int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M}, \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})\right] \label{eqn:gauss_kl}.
 \end{align}
-Intuitively the correction $r$ captures the rotational asymmetry of the
-base distribution: if $q^*$ is already rotationally symmetric (e.g.,
-if $\v{M}=\v{0}$, so $q^*$ is centered at the origin)
-then the ratio inside the integral is unity and the correction is zero. Examining this correction more closely,
+We approximate the expectation by Monte Carlo, so that it remains
+only to evaluate the interior integral $r_\theta(\v{X}) = -\log
+\int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M},
+  \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})$. Examining
+this more closely,
 \begin{align*}
-r(\v{X}, \v{M}, \v{\Sigma}) &= \log \int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M}, \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})\\
-&= \log \int_{\v{T}\in \O(k)} e^{-\frac{1}{2} \Tr \left[
+r_\theta(\v{X})
+&= -\log \int_{\v{T}\in \O(k)} e^{-\frac{1}{2} \Tr \left[
   (\v{X}\v{T}^T-\v{M})\v{\Sigma}^{-1}(\v{X}\v{T}^T-\v{M})^T \right] + \frac{1}{2}\Tr \left[
   (\v{X}-\v{M})\v{\Sigma}^{-1}(\v{X}-\v{M})^T \right] }  dV(\v{T})\\
-&= \log \int_{\v{T}\in \O(k)} e^{-\frac{1}{2} \left( \Tr \left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{T}\v{X}^T\right] - \Tr\left[\v{X}\v{\Sigma}^{-1}\v{X}^T\right]\right)}
-  e^{\Tr\left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{M}^T \right] - \Tr\left[\v{X}\v{\Sigma}^{-1}\v{M}^T\right]} dV(\v{T})\\
-&= \log \int_{\v{T}\in \O(k)} f(\v{T}) g(\v{T}) dV(\v{T})
+&= -\log \int_{\v{T}\in \O(k)} e^{-\frac{1}{2} \left( \Tr
+  \left[\v{X}^T\v{X} \left(\v{T}^T\v{\Sigma}^{-1}\v{T} - \v{\Sigma}^{-1}\right)\right]\right)}
+  e^{\Tr\left[\v{\Sigma}^{-1}\frac{\v{M}^T\v{X} + \v{X}^T\v{M}}{2}
+  (\v{T}^T - \I) \right] } dV(\v{T})\\
+&= -\log \int_{\v{T}\in \O(k)} f(\v{T}) g(\v{T}) dV(\v{T})
 \end{align*}
 we find that it is effectively an inner product of two functions $f,g$
 over the orthogonal group. The first factor, $f(\v{T}) = \exp\left\{-\frac{1}{2}
-  \left( \Tr \left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{T}\v{X}^T\right] -
-    \Tr\left[\v{X}\v{\Sigma}^{-1}\v{X}^T\right]\right)\right\},$
+  \left( \Tr \left[\v{X}^T\v{X} \left(\v{T}^T\v{\Sigma}^{-1}\v{T} - \v{\Sigma}^{-1}\right)\right]\right)\right\},$
 measures the discrepancy between the precision matrix $\v{\Sigma}^{-1}$ and its
-transformed counterpart $\v{T}^T\v{\Sigma}^{-1}\v{T}$, while the second factor, $g(\v{T}) = \exp\left\{\Tr\left[\v{X}\v{T}^T\v{\Sigma}^{-1}\v{M}^T \right] -
-  \Tr\left[\v{X}\v{\Sigma}^{-1}\v{M}^T\right]\right\},$ measures the extent to which a
+transformed counterpart $\v{T}^T\v{\Sigma}^{-1}\v{T}$, while the second factor, $g(\v{T}) = \exp\left\{\Tr\left[\v{\Sigma}^{-1}\frac{\v{M}^T\v{X} + \v{X}^T\v{M}}{2}
+  (\v{T}^T - \I)\right]\right\},$ measures the extent to which a
 given transformation $\v{T}$ aligns the observed value $\v{X}$ with the mean
 $\v{M}$. Note that $f$ vanishes in the case of isotropic covariance $\v{\Sigma} = c\I$, since this implies
 $\v{T}^T\v{\Sigma}^{-1}\v{T} = \v{\Sigma}^{-1}$. In this case we have
 \begin{align*}
-r(\v{X}, \v{M}, \v{\Sigma}) &= \log \int_{\v{T}\in \O(k)}  g(\v{T}) dV(\v{T})\\
-&= \log \int_{\v{T}\in \O(k)}  \exp\left\{\Tr\left[c^{-1} \v{M}^T\v{X}\v{T}^T \right] -
-  \Tr\left[c^{-1}\v{M}^T \v{X}\right]\right\} dV(\v{T}),
+r_\theta(\v{X}) &= -\log \int_{\v{T}\in \O(k)}  g(\v{T}) dV(\v{T})\\
+&= -\log \int_{\v{T}\in \O(k)}  \exp\left\{\Tr\left[
+  \frac{1}{2c} (\v{M}^T\v{X} + \v{X}^T\v{M})
+  (\v{T}^T - \I) \right] \right\} dV(\v{T}),
 \end{align*}
-and letting $\v{A} = c^{-1}\v{M}^T \v{X}$, this simplifies to
+and letting $\v{A} = \frac{1}{2c} (\v{M}^T \v{X} + \v{X}^T \v{M})$, this simplifies to
 \begin{align*}
-&= \log \int_{\v{T}\in \O(k)}  \exp\left\{\Tr\left[\v{A}\v{T}^T \right] - \Tr\left[\v{A}\right]\right\} dV(\v{T})\\
-&= - \Tr\left[\v{A}\right] + \log \pFq{0}{1}\left[\frac{k}{2}; \frac{1}{4}\v{A}\v{A}^T\right]
+&= -\log \int_{\v{T}\in \O(k)}  \exp\left\{\Tr\left[\v{A}\v{T}^T \right] - \Tr\left[\v{A}\right]\right\} dV(\v{T})\\
+&= \Tr\left[\v{A}\right] - \log \pFq{0}{1}\left[\frac{k}{2}; \frac{1}{4}\v{A}\v{A}^T\right]
 \end{align*}
 where the hypergeometric function $\pFq{0}{1}\left[\frac{k}{2}; \frac{1}{4}\v{A}\v{A}^T\right] = \int_{\v{T}\in \O(k)}  \exp\left\{\Tr\left[\v{A}\v{T}^T \right]\right\}
   dV(\v{T})$ is a form of matrix-argument Bessel function
@@ -487,8 +523,8 @@ accuracy in a variety of settings''. It can be implemented stably in the log dom
 function of the singular values $\sigma$. 
 
 We use use the Laplace approximation
-(\ref{eqn:laplace}) to implement the symmetrized density
-(\ref{eqn:symmetrized_orthog}), with automatic gradients computed
+(\ref{eqn:laplace}) to implement the divergence
+(\ref{eqn:gauss_kl}), with automatic gradients computed
 using TensorFlow. 
 Code is given in \Cref{listing:stuff}. Although TensorFlow does not
 implement gradients for the SVD
@@ -506,22 +542,16 @@ relative to the base posterior $q^*$.
 \begin{listing}
 \begin{minted}{python}
 
-def symmetrized_log_density(X, M, c):
+def gaussian_orthog_stochastic_kl(X, M, c):
     # X, M: 2D Tensors of matching dimensions
     # c: scalar (isotropic) variance
+    # returns: stochastic estimate of KL[ q* | \tilde{q} ] for 
+    #   q* ~ N(X; M, cI) under orthogonal symmetry
     
-    log_q = gaussian_log_density(X, M, c)
-
-    # correction term r depends on singular vals of X'M
     A = tf.matmul(tf.transpose(X), M) / c
     svs = differentiable_singular_vals(A)
-    r = log_bessel(svs, k) - tf.trace(A)
-    return log_q + r
-
-def gaussian_log_density(X, M, c):
-    Z = tf.square(X-M) / c
-    lps = -0.5 * Z   - .5 * tf.log(2*np.pi * tf.ones_like(X) * c)
-    return tf.reduce_sum(lps)
+    r =  tf.trace(A) - log_bessel(svs, k)
+    return r
 
 def differentiable_singular_vals(A):
     # returns singular vals of A with approximate gradients. 
@@ -545,6 +575,30 @@ def log_bessel(svs, n):
   Gaussian log density.}
 \label{listing:stuff}
 \end{listing}
+
+
+% \[KL[q^*_\theta \| \tilde{q}_\theta] = -\E_{q^*} \left[\log  \int_{\v{T}\in \O(k)} \frac{\N(\v{X}\v{T}^T; \v{M}, \v{\Sigma})}{\N(\v{X}; \v{M}, \v{\Sigma} ) }  dV(\v{T})\right]\]
+
+% \begin{align*}
+% = -\E_{q^*} \left[ \log  \int_{\v{T}\in \O(k)}\right.
+%   \exp&\left\{\textcolor{red}{-\frac{1}{2} \Tr \left[\v{X}^T \v{X}
+%       (\v{T}^T\v{\Sigma}^{-1}\v{T} - \v{\Sigma}^{-1})\right]}\right.\\
+% &\;\;\left.\left.\textcolor{blue}{+\frac{1}{2}\Tr\left[\v{\Sigma}^{-1}(\v{M}^T\v{X} + \v{X}^T\v{M}) (\v{T}^T-\I) \right]} \right\}
+%  dV(\v{T}) \right]
+% \end{align*}
+
+
+% \begin{align*}
+% &= \E_{q^*} \left[ -\log  \int_{\v{T}\in \O(k)} \text{etr}\left[\v{A}\v{T}^T -
+%   \v{A}\right] dV(\v{T})\right]\\
+% &= \E_{q^*} \left[\Tr\left[\v{A}\right] - \log \pFq{0}{1}\left[\frac{k}{2};
+%   \frac{1}{4}\v{A}\v{A}^T\right]\right]
+% \end{align*}
+
+% \[\v{A} = \textcolor{blue}{\frac{1}{2}\v{\Sigma}^{-1}(\v{M}^T\v{X} + \v{X}^T\v{M})}\]
+
+% \[\pFq{0}{1}\left[\frac{k}{2}; \frac{1}{4}\v{A}\v{A}^T\right] = \int_{\v{T}\in \O(k)}  \exp\left\{\Tr\left[\v{A}\v{T}^T \right]\right\}
+%   dV(\v{T})\]
 
 \end{document}
 
